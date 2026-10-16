@@ -1,0 +1,27 @@
+<div class="page-head">
+  <div><h1>Dashboard</h1><p>Overview of client applications and configurations.</p></div>
+  <a class="btn primary" routerLink="/admin/clients/create">+ Create Client</a>
+</div>
+<div class="stats">
+  <div class="card stat"><span>Total Clients</span><strong>{{ stats.total }}</strong></div>
+  <div class="card stat"><span>Active Applications</span><strong>{{ stats.active }}</strong></div>
+  <div class="card stat"><span>Draft Configurations</span><strong>{{ stats.draft }}</strong></div>
+  <div class="card stat"><span>Recently Created (7d)</span><strong>{{ stats.recent }}</strong></div>
+</div>
+<div class="card">
+  <div class="card-body head"><h2 class="card-title">Recent Clients</h2><a routerLink="/admin/clients">View all</a></div>
+  @if (loading) { <div class="spinner"></div> }
+  @else if (loadError) { <div class="empty"><h3>Could not load clients</h3><p>Is the Spring Boot backend running on port 8080?</p></div> }
+  @else if (clients.length === 0) { <div class="empty"><h3>No clients yet</h3><p>Create your first client to get started.</p></div> }
+  @else {
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Client</th><th>Application</th><th>Status</th><th>Created</th></tr></thead>
+      <tbody>
+        @for (c of clients.slice(0, 5); track c.id) {
+          <tr><td><a [routerLink]="['/admin/clients/view', c.id]">{{ c.clientName }}</a></td>
+            <td>{{ c.applicationName }}</td><td><app-status-badge [status]="c.status" /></td>
+            <td>{{ c.createdAt | date: 'mediumDate' }}</td></tr>
+        }
+      </tbody></table></div>
+  }
+</div>

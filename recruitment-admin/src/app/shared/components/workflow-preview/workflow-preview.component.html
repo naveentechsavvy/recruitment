@@ -1,0 +1,13 @@
+@if (steps.length === 0) {
+  <div class="none">No stages selected yet. Choose at least one recruitment stage.</div>
+} @else {
+  <ol class="flow">
+    @for (s of steps; track s.id; let i = $index) {
+      <li [class.terminal]="s.id === 'rejected'">
+        <div class="node"><span class="num">{{ i + 1 }}</span>
+          <div><strong>{{ s.label }}</strong><small>{{ s.description }}</small></div></div>
+        @if (i < steps.length - 1) { <div class="arrow" aria-hidden="true">↓</div> }
+      </li>
+    }
+  </ol>
+}

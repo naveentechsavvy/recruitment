@@ -1,0 +1,65 @@
+<div class="page-head">
+  <div><h1>Clients</h1><p>Manage client applications and their recruitment workflows.</p></div>
+  @if (canManage) { <a class="btn primary" routerLink="/admin/clients/create">+ Create Client</a> }
+</div>
+
+@if (notice) { <div class="alert notice" [class]="notice.type">{{ notice.text }}</div> }
+
+<div class="card">
+  @if (loading) { <div class="spinner"></div> }
+  @else if (loadError) {
+    <div class="empty"><h3>Could not load clients</h3><p>Is the Spring Boot backend running on port 8080?</p>
+      <button class="btn" (click)="load()">Try again</button></div>
+  } @else if (clients.length === 0) {
+    <div class="empty"><h3>No clients yet</h3><p>Create a client to configure its recruitment application.</p>
+      @if (canManage) { <a class="btn primary" routerLink="/admin/clients/create">+ Create Client</a> }</div>
+  } @else {
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th>Logo</th><th>Client Name</th><th>Application Name</th><th>Process Steps</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody>
+        @for (c of clients; track c.id) {
+          <tr>
+            <td>@if (c.logo) { <img class="logo-sm" [src]="c.logo" [alt]="c.clientName + ' logo'" /> } @else { <div class="logo-ph">{{ c.clientName.charAt(0).toUpperCase() }}</div> }</td>
+            <td><strong>{{ c.clientName }}</strong></td>
+            <td>{{ c.applicationName }}</td>
+            <td>{{ c.recruitmentStages.length }}</td>
+            <td><app-status-badge [status]="c.status" [frozen]="c.frozen" /></td>
+            <td>{{ c.createdAt | date: 'mediumDate' }}</td>
+            <td>
+              <div class="actions">
+                @if (c.status !== 'Draft' && c.slug) { <a class="btn sm success" [routerLink]="['/app', c.slug]" target="_blank">Open Application</a> }
+                <a class="btn sm" [routerLink]="['/admin/clients/view', c.id]">View</a>
+                @if (canManage) {
+                  <a class="btn sm" [routerLink]="['/admin/clients/edit', c.id]" fragment="process">Configure</a>
+                  <button type="button" class="btn sm" aria-haspopup="menu" [attr.aria-expanded]="menuFor?.id === c.id"
+                          [attr.aria-label]="'Settings for ' + c.clientName" (click)="toggleMenu($event, c)">⚙ Settings</button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody></table></div>
+  }
+</div>
+
+@if (menuFor) {
+  <div class="menu" role="menu" [style.top.px]="menuPos.top" [style.right.px]="menuPos.right">
+    <a role="menuitem" [routerLink]="['/admin/clients/edit', menuFor.id]" (click)="closeMenu()">Edit</a>
+    <button type="button" role="menuitem" class="danger" (click)="ask('delete', menuFor)">Delete</button>
+    <button type="button" role="menuitem" (click)="ask(menuFor.frozen ? 'unfreeze' : 'freeze', menuFor)">{{ menuFor.frozen ? 'Unfreeze' : 'Freeze' }}</button>
+  </div>
+}
+
+@if (dialog) {
+  <div class="backdrop" (click)="cancelDialog()">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title" (click)="$event.stopPropagation()">
+      <h2 id="dlg-title">{{ dialogTitle }}</h2>
+      <p>{{ dialogText }}</p>
+      @if (dialogError) { <div class="alert error">{{ dialogError }}</div> }
+      <div class="buttons">
+        <button type="button" class="btn" [disabled]="busy" (click)="cancelDialog()">Cancel</button>
+        <button type="button" class="btn" [class.danger]="dialog.kind === 'delete'" [class.primary]="dialog.kind !== 'delete'" [disabled]="busy" (click)="confirm()">{{ dialogButton }}</button>
+      </div>
+    </div>
+  </div>
+}

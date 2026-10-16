@@ -1,0 +1,49 @@
+@if (loading) { <div class="spinner"></div> }
+@else if (notFound || !client) {
+  <div class="card empty"><h3>Client not found</h3><a class="btn" routerLink="/admin/clients">Back to Clients</a></div>
+} @else {
+  <div class="page-head">
+    <div class="who">
+      @if (client.logo) { <img class="logo" [src]="client.logo" alt="Client logo" /> } @else { <div class="logo ph">{{ client.clientName.charAt(0) }}</div> }
+      <div><h1>{{ client.clientName }}</h1><p>{{ client.applicationName }} · <app-status-badge [status]="client.status" /></p></div>
+    </div>
+    <div>
+      @if (client.status !== 'Draft' && client.slug) {
+        <a class="btn success" [routerLink]="['/app', client.slug]" target="_blank">Open Application ↗</a>
+      }
+      <a class="btn" routerLink="/admin/clients">Back</a> <a class="btn primary" [routerLink]="['/admin/clients/edit', client.id]">Edit</a>
+    </div>
+  </div>
+  @if (justGenerated && client.slug) {
+    <div class="alert success">
+      Application generated. Public link: <a [routerLink]="['/app', client.slug]" target="_blank"><strong>{{ publicUrl }}</strong></a>
+      <a class="btn sm success" [routerLink]="['/app', client.slug]" target="_blank">Open Application ↗</a>
+    </div>
+  }
+  <div class="grid">
+    <div class="card card-body">
+      <h2 class="card-title">Client &amp; Application</h2>
+      <dl>
+        <dt>Description</dt><dd>{{ client.description || '—' }}</dd>
+        <dt>Application Name</dt><dd>{{ client.applicationName }}</dd>
+        <dt>Theme</dt><dd>{{ themeLabel(client.theme) }}</dd>
+        <dt>Header Colour</dt><dd><span class="sw" [style.background]="client.headerColor"></span>{{ client.headerColor }}</dd>
+        <dt>Footer Colour</dt><dd><span class="sw" [style.background]="client.footerColor"></span>{{ client.footerColor }}</dd>
+        <dt>Created</dt><dd>{{ client.createdAt | date: 'medium' }}</dd>
+        <dt>Last Updated</dt><dd>{{ client.updatedAt | date: 'medium' }}</dd>
+      </dl>
+    </div>
+    <div class="card card-body">
+      <h2 class="card-title">Recruitment Workflow</h2>
+      <p class="card-sub">{{ client.recruitmentStages.length }} configured stage(s)</p>
+      <app-workflow-preview [stages]="client.recruitmentStages" />
+    </div>
+    <div class="card card-body">
+      <h2 class="card-title">Hiring</h2>
+      <p class="card-sub">Hiring managers and the requirements they create for this client.</p>
+      <a class="btn primary" [routerLink]="['/admin/clients', client.id, 'hiring']">Open Hiring Dashboard</a>
+      <a class="btn" [routerLink]="['/admin/clients', client.id, 'hiring-managers']">Hiring Managers</a>
+      <a class="btn" [routerLink]="['/admin/clients', client.id, 'requirements']">Requirements</a>
+    </div>
+  </div>
+}

@@ -1,0 +1,5 @@
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.stat { padding: 20px; span { color: var(--muted); } strong { display: block; font-size: 30px; margin-top: 6px; } }
+.head { display: flex; justify-content: space-between; align-items: center; padding-bottom: 12px; }
+@media (max-width: 900px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 480px) { .stats { grid-template-columns: 1fr; } }

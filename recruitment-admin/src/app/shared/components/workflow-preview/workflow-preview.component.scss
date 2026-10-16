@@ -1,0 +1,7 @@
+.flow { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: stretch; }
+.node { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
+.num { width: 26px; height: 26px; flex: none; border-radius: 50%; background: var(--primary); color: #fff; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+strong { display: block; } small { color: var(--muted); }
+.arrow { text-align: center; color: var(--muted); line-height: 1.4; }
+.terminal .node { border-style: dashed; border-color: #fca5a5; background: #fef2f2; .num { background: var(--danger); } }
+.none { padding: 28px 12px; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: 8px; }

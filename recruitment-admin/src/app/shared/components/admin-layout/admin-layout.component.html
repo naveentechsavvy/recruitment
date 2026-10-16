@@ -1,0 +1,23 @@
+<div class="shell">
+  <aside class="sidebar" [class.open]="navOpen">
+    <div class="brand"><span class="mark"><img [src]="logoMark" alt="" /></span> Velzenix Nova</div>
+    <nav>
+      @for (n of nav; track n.path) {
+        <a [routerLink]="n.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: n.exact }" (click)="navOpen = false">
+          <span class="ico">{{ n.icon }}</span>{{ n.label }}
+        </a>
+      }
+    </nav>
+    <div class="foot">Recruitment Platform · Admin</div>
+  </aside>
+  <div class="main">
+    <header class="topbar">
+      <button class="burger" (click)="navOpen = !navOpen" aria-label="Toggle menu">☰</button>
+      <div class="title">Admin Portal</div>
+      <div class="user"><span class="avatar">{{ email.charAt(0).toUpperCase() || 'A' }}</span>
+        <span class="mail">{{ email }}</span>
+        <button class="btn sm" (click)="logout()">Logout</button></div>
+    </header>
+    <main class="content"><router-outlet /></main>
+  </div>
+</div>

@@ -1,0 +1,204 @@
+<div class="page-head">
+  <div>
+    <h1>{{ isEdit ? 'Edit Client' : 'Create Client Portal' }}</h1>
+    <p>Configure the client's branding and recruitment workflow.</p>
+  </div>
+  <a class="btn" routerLink="/admin/clients">← Back to Clients</a>
+</div>
+
+@if (loading) { <div class="spinner"></div> }
+@else {
+  @if (message) { <div class="alert" [class]="message.type">{{ message.text }}</div> }
+
+  <form [formGroup]="form" novalidate>
+    <div class="layout">
+      <div class="col-main">
+        <section class="card card-body">
+          <h2 class="card-title">1 · Client Information</h2>
+          <p class="card-sub">Basic details about the client company.</p>
+
+          <div class="field">
+            <label for="clientName">Client Name <span class="req">*</span></label>
+            <input id="clientName" class="input" formControlName="clientName" placeholder="Enter client name" [class.invalid]="showError('clientName')" />
+            @if (showError('clientName')) { <span class="error">Client name is required.</span> }
+          </div>
+
+          <div class="field">
+            <label>Client Logo</label>
+            <div class="logo-row">
+              <div class="logo-box">
+                @if (form.controls.logo.value) { <img [src]="form.controls.logo.value" alt="Logo preview" /> } @else { <span>No logo</span> }
+              </div>
+              <div>
+                <input #file type="file" accept="image/*" (change)="onLogo($event)" hidden />
+                <button type="button" class="btn sm" (click)="file.click()">{{ form.controls.logo.value ? 'Replace' : 'Upload' }} logo</button>
+                @if (form.controls.logo.value) { <button type="button" class="btn sm danger" (click)="removeLogo(); file.value = ''">Remove</button> }
+                <div class="hint">PNG, JPG, WebP or GIF · max 500 KB</div>
+                @if (logoError) { <div class="error">{{ logoError }}</div> }
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="description">Client Description</label>
+            <textarea id="description" class="input" formControlName="description" placeholder="Enter a short description"></textarea>
+          </div>
+        </section>
+
+        <section class="card card-body">
+          <h2 class="card-title">2 · Application Configuration</h2>
+          <p class="card-sub">How the generated client application is named and themed.</p>
+
+          <div class="field">
+            <label for="applicationName">Application Name <span class="req">*</span></label>
+            <input id="applicationName" class="input" formControlName="applicationName" placeholder="Enter application name" [class.invalid]="showError('applicationName')" />
+            @if (showError('applicationName')) { <span class="error">Application name is required.</span> }
+          </div>
+
+          <div class="field">
+            <label>Theme</label>
+            <div class="themes">
+              @for (t of themes; track t.id) {
+                <label class="theme" [class.on]="!isCustom && form.controls.theme.value === t.id">
+                  <input type="radio" name="theme" [checked]="!isCustom && form.controls.theme.value === t.id" (change)="selectPreset(t)" />
+                  <span class="dot" [style.background]="'linear-gradient(135deg,' + t.color + ' 50%,' + t.secondary + ' 50%)'"></span>{{ t.label }}
+                </label>
+              }
+              <label class="theme" [class.on]="isCustom" (click)="selectCustom()">
+                <span class="dot" [style.background]="isCustom ? 'linear-gradient(135deg,' + colors.header + ' 50%,' + colors.footer + ' 50%)' : '#e11d48'"></span>Custom colour
+              </label>
+            </div>
+            <div class="hint">Each theme sets two colours: the header (top of the portal) and the footer (bottom of the portal).</div>
+
+            @if (isCustom) {
+              <div class="custom-colors">
+                <div class="color-field">
+                  <label for="headerHex">Header Colour</label>
+                  <div class="color-row">
+                    <input type="color" [value]="pickerValue('headerColor')" (input)="onPick('headerColor', $event)" aria-label="Pick the header colour" />
+                    <input id="headerHex" class="input hex" [class.invalid]="hexError('headerColor')" formControlName="headerColor"
+                      maxlength="7" placeholder="#2563EB" spellcheck="false" (blur)="fixHex('headerColor')" />
+                  </div>
+                  @if (hexError('headerColor')) { <span class="error">Enter a valid HEX colour, like #2563EB.</span> }
+                </div>
+                <div class="color-field">
+                  <label for="footerHex">Footer Colour</label>
+                  <div class="color-row">
+                    <input type="color" [value]="pickerValue('footerColor')" (input)="onPick('footerColor', $event)" aria-label="Pick the footer colour" />
+                    <input id="footerHex" class="input hex" [class.invalid]="hexError('footerColor')" formControlName="footerColor"
+                      maxlength="7" placeholder="#1E3A8A" spellcheck="false" (blur)="fixHex('footerColor')" />
+                  </div>
+                  @if (hexError('footerColor')) { <span class="error">Enter a valid HEX colour, like #1E3A8A.</span> }
+                </div>
+              </div>
+              <div class="hint">Text on the header and footer switches between white and dark automatically so it stays readable.</div>
+            }
+          </div>
+        </section>
+
+        <section class="card card-body" id="process">
+          <h2 class="card-title">3 · Recruitment Process <span class="req">*</span></h2>
+          <p class="card-sub">Select the stages this client needs. Stages follow the platform's predefined order.</p>
+          <div class="stages" [class.invalid]="showError('recruitmentStages')">
+            @for (s of visibleStages; track s.id) {
+              <label class="stage" [class.on]="isSelected(s.id)">
+                <input type="checkbox" [checked]="isSelected(s.id)" (change)="toggleStage(s.id, $any($event.target).checked)" />
+                <span><strong>{{ s.label }} ({{ s.classification }})</strong><small>{{ s.description }}</small></span>
+              </label>
+            }
+          </div>
+          @if (showError('recruitmentStages')) { <span class="error">Select at least one recruitment stage.</span> }
+        </section>
+
+        <section class="card card-body" id="footer">
+          <div class="sec-head">
+            <div>
+              <h2 class="card-title">4 · Footer Settings</h2>
+              <p class="card-sub">Shown in the footer of the generated application. All fields are optional; empty ones are not displayed.</p>
+            </div>
+            @if (footerHasContent) { <button type="button" class="btn sm" (click)="clearFooter()">Clear all</button> }
+          </div>
+          <div formGroupName="footer">
+            <div class="two">
+              <div class="field">
+                <label for="f-company">Company Name</label>
+                <input id="f-company" class="input" formControlName="companyName" placeholder="Enter company name" [class.invalid]="showFooterError('companyName')" />
+                @if (showFooterError('companyName')) { <span class="error">Company name must be 150 characters or fewer.</span> }
+              </div>
+              <div class="field">
+                <label for="f-website">Website URL</label>
+                <input id="f-website" class="input" formControlName="websiteUrl" placeholder="https://www.example.com" [class.invalid]="showFooterError('websiteUrl')" />
+                @if (showFooterError('websiteUrl')) { <span class="error">Enter a full web address, like https://www.example.com.</span> }
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-address">Company Address</label>
+              <textarea id="f-address" class="input short" formControlName="companyAddress" placeholder="Street, city, postal code" [class.invalid]="showFooterError('companyAddress')"></textarea>
+              @if (showFooterError('companyAddress')) { <span class="error">Address must be 300 characters or fewer.</span> }
+            </div>
+            <div class="two">
+              <div class="field">
+                <label for="f-email">Contact Email</label>
+                <input id="f-email" type="email" class="input" formControlName="contactEmail" placeholder="careers@example.com" [class.invalid]="showFooterError('contactEmail')" />
+                @if (showFooterError('contactEmail')) { <span class="error">Enter a valid email address.</span> }
+              </div>
+              <div class="field">
+                <label for="f-phone">Phone Number</label>
+                <input id="f-phone" class="input" formControlName="phone" placeholder="+91 98765 43210" [class.invalid]="showFooterError('phone')" />
+                @if (showFooterError('phone')) { <span class="error">Phone number can only contain digits, spaces, + ( ) - and .</span> }
+              </div>
+            </div>
+            <div class="field">
+              <label for="f-copy">Copyright Text</label>
+              <input id="f-copy" class="input" formControlName="copyrightText" placeholder="Enter copyright text" [class.invalid]="showFooterError('copyrightText')" />
+              @if (showFooterError('copyrightText')) { <span class="error">Copyright text must be 200 characters or fewer.</span> }
+            </div>
+            <div class="field">
+              <label for="f-custom">Additional Footer Text</label>
+              <textarea id="f-custom" class="input short" formControlName="customText" placeholder="e.g. We are an equal opportunity employer." [class.invalid]="showFooterError('customText')"></textarea>
+              @if (showFooterError('customText')) { <span class="error">Additional text must be 500 characters or fewer.</span> }
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="col-side">
+        <div class="card card-body sticky" #previewCard>
+          <h2 class="card-title">Portal Preview</h2>
+          <p class="card-sub">Live · colours and footer update as you type</p>
+          <div class="mini">
+            <div class="mini-head" [style.background]="'linear-gradient(135deg,' + colors.header + ',' + colors.header2 + ')'" [style.color]="colors.onHeader">
+              <strong>{{ form.controls.applicationName.value || 'Application name' }}</strong>
+              <small>{{ form.controls.clientName.value || 'Client name' }}</small>
+            </div>
+            <div class="mini-body"><span></span><span></span><span class="short"></span></div>
+            <div class="mini-foot" [style.background]="colors.footer" [style.color]="colors.onFooter">
+              @if (footerValue.companyName.trim()) { <strong>{{ footerValue.companyName.trim() }}</strong> }
+              @if (footerValue.companyAddress.trim()) { <span>{{ footerValue.companyAddress.trim() }}</span> }
+              @if (footerValue.contactEmail.trim()) { <span>{{ footerValue.contactEmail.trim() }}</span> }
+              @if (footerValue.phone.trim()) { <span>{{ footerValue.phone.trim() }}</span> }
+              @if (footerValue.websiteUrl.trim()) { <span>{{ footerValue.websiteUrl.trim() }}</span> }
+              @if (footerValue.customText.trim()) { <span>{{ footerValue.customText.trim() }}</span> }
+              @if (footerValue.copyrightText.trim()) { <span class="copy">{{ footerValue.copyrightText.trim() }}</span> }
+              @if (!footerHasContent) { <span class="copy">Footer · {{ colors.footer }}</span> }
+            </div>
+          </div>
+        </div>
+        <div class="card card-body flow">
+          <h2 class="card-title">Recruitment Workflow</h2>
+          <p class="card-sub">Live preview · {{ selected.length }} stage(s)</p>
+          <app-workflow-preview [stages]="selected" />
+        </div>
+      </aside>
+    </div>
+
+    <div class="actions card">
+      @if (isGenerated) {
+        <button type="button" class="btn success" [disabled]="saving" (click)="save()">{{ saving ? 'Saving…' : 'Save' }}</button>
+      } @else {
+        <button type="button" class="btn" [disabled]="saving" (click)="saveDraft()">Save Draft</button>
+        <button type="button" class="btn success" [disabled]="saving" (click)="generate()">{{ saving ? 'Saving…' : 'Generate Application' }}</button>
+      }
+    </div>
+  </form>
+}

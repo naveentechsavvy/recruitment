@@ -1,0 +1,17 @@
+
+# Angular dependencies and generated files
+recruitment-admin/node_modules/
+recruitment-admin/.angular/
+recruitment-admin/dist/
+
+# Java / Maven generated files
+recruitment-backend/target/
+
+# Uploaded candidate documents - keep private
+recruitment-backend/private-resumes/*
+recruitment-backend/uploads/*
+
+# Environment secrets
+.env
+.env.*
+!.env.example
