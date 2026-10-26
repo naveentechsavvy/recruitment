@@ -67,12 +67,36 @@ class StagePermissionRolesTest {
     }
 
     @Test
-    void managerCanEditOnlyTheManagerRound() {
-        atStage("manager-round");
-        assertTrue(permissions.canEdit(manager, candidate, "manager-round"));
-        atStage("hr-round");
-        assertFalse(permissions.canEdit(manager, candidate, "hr-round"));
-        assertFalse(permissions.canEdit(manager, candidate, StagePermissionService.HIRING_MANAGER_STAGE));
+    void managerIsViewOnly() {
+        for (String stage : new String[]{"manager-round", "hr-round", "offer-released", StagePermissionService.HIRING_MANAGER_STAGE}) {
+            atStage(stage);
+            assertFalse(permissions.canEdit(manager, candidate, stage), stage);
+        }
+        assertDoesNotThrow(() -> permissions.requireCanView(manager, candidate));
+    }
+
+    @Test
+    void hrBpCanReleaseTheOffer() {
+        atStage("offer-released");
+        assertTrue(permissions.canEdit(hrbp, candidate, "offer-released"));
+    }
+
+    @Test
+    void recruiterCanEditEverythingExceptReleasingTheOffer() {
+        atStage("offer-released");
+        assertFalse(permissions.canEdit(recruiter, candidate, "offer-released"));
+        assertThrows(AccessDeniedException.class, () -> permissions.requireCanEdit(recruiter, candidate, "offer-released"));
+        for (String stage : new String[]{StagePermissionService.SCREENING_STAGE, "technical-round-l1", "manager-round", "offer-approval", "offer-accepted"}) {
+            atStage(stage);
+            assertTrue(permissions.canEdit(recruiter, candidate, stage), stage);
+        }
+    }
+
+    @Test
+    void adminCanReleaseTheOffer() {
+        atStage("offer-released");
+        AuthUser admin = new AuthUser(10L, "admin@example.com", Role.ADMIN, null);
+        assertTrue(permissions.canEdit(admin, candidate, "offer-released"));
     }
 
     @Test

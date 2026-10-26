@@ -28,8 +28,10 @@ import java.util.List;
 /**
  * Who may call what.
  * ADMIN can do everything. RECRUITER, HIRING_MANAGER, MANAGER and HR_BP can read (GET) and may call the stage-update endpoint;
- * StagePermissionService decides which stage each may edit. Only ADMIN can manage users and other data.
+ * StagePermissionService decides which stage each may edit (MANAGER is view-only there, HR_BP releases offers).
+ * Requirements on a client website (/api/site/requirements) can be written only by ADMIN and RECRUITER. Only ADMIN can manage users and other data.
  * A HIRING_MANAGER can only read his own client's data (see ClientScopeFilter).
+ * The website editor (/api/site/settings and /api/site/logo) can be changed only by ADMIN, RECRUITER and CLIENT_ADMIN.
  * CLIENT_ADMIN (website editor) can only use /api/site/** for his own client's website (see SiteController).
  */
 @Configuration
@@ -106,8 +108,37 @@ public class SecurityConfig {
                                 "/api/clients/*/roles",
                                 "/api/clients/*/roles/**"
                         ).hasRole("ADMIN") // role management: admin only, reads included
-                        // TEMPORARY: any logged-in user may use the site (footer) editor while the UI is being finished.
-                        // Put back .hasRole("CLIENT_ADMIN") when roles and permissions are configured.
+                        // Requirements (jobs) can be created and changed only by an admin or a recruiter.
+                        // These must stay ABOVE the general /api/site/** rule below, because the first match wins.
+                        .requestMatchers(HttpMethod.POST, "/api/site/requirements")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.PUT, "/api/site/requirements/*")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/site/requirements/*/status")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        // Candidates inside a client website. Same rules as /api/candidates/** above; the service checks them again.
+                        // These must stay ABOVE the general /api/site/** rule below, because the first match wins.
+                        .requestMatchers(HttpMethod.PUT, "/api/site/candidates/*/stages/*")
+                        .hasAnyRole("ADMIN", "RECRUITER", "HIRING_MANAGER", "MANAGER", "HR_BP")
+                        .requestMatchers(HttpMethod.PUT, "/api/site/candidates/*/screening")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.POST, "/api/site/candidates/*/screening/action")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.PUT, "/api/site/candidates/*/resume")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.POST, "/api/site/candidates/*/remarks")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        .requestMatchers(HttpMethod.POST, "/api/site/requirements/*/candidates")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        // Website editor (footer, name, description, logo): ADMIN, RECRUITER and CLIENT_ADMIN only.
+                        // Hiring Manager, Manager and HR BP can read but not change the website.
+                        .requestMatchers(HttpMethod.PUT, "/api/site/settings")
+                        .hasAnyRole("ADMIN", "RECRUITER", "CLIENT_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/site/logo")
+                        .hasAnyRole("ADMIN", "RECRUITER", "CLIENT_ADMIN")
+                        .requestMatchers(HttpMethod.DELETE, "/api/site/logo")
+                        .hasAnyRole("ADMIN", "RECRUITER", "CLIENT_ADMIN")
+                        // Everything else under /api/site/** is reading, plus the candidate and requirement rules above.
                         // The client still comes from the login token (SiteService.own), so data stays separate per client.
                         .requestMatchers("/api/site/**").hasAnyRole(
                                 "ADMIN", "RECRUITER", "HIRING_MANAGER", "MANAGER", "HR_BP", "CLIENT_ADMIN")

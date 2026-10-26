@@ -18,17 +18,17 @@ export type Role =
   | 'CLIENT_ADMIN';
 
 /**
- * Footer editing is temporarily available to every authenticated client-website user.
- * Role-specific restrictions can be added later when the access rules are finalized.
+ * Who may edit the website (footer, name, logo) of a client website.
+ * Admin, Recruiter and the client's website editor (CLIENT_ADMIN). Hiring Manager, Manager and HR BP cannot.
+ * The server enforces the same rule (SecurityConfig); this list only decides what the screen shows.
  */
-export const FOOTER_EDIT_ROLES: Role[] = [
-  'ADMIN',
-  'RECRUITER',
-  'HIRING_MANAGER',
-  'MANAGER',
-  'HR_BP',
-  'CLIENT_ADMIN',
-];
+export const FOOTER_EDIT_ROLES: Role[] = ['ADMIN', 'RECRUITER', 'CLIENT_ADMIN'];
+
+/**
+ * Who may create and edit requirements (jobs) on a client website.
+ * The server enforces the same rule (SecurityConfig); this list only decides what the screen shows.
+ */
+export const REQUIREMENT_EDIT_ROLES: Role[] = ['ADMIN', 'RECRUITER'];
 
 interface Session {
   token: string;
@@ -104,12 +104,29 @@ export class AuthService {
   }
 
   /**
-   * Footer editor visibility:
-   * Any user with a valid session for this client website can see the option.
-   * Role-specific restrictions can be added later.
+   * Show "Add / Edit / Change status" for requirements?
+   * Admin and Recruiter only. Everyone else can look but not change (the server refuses them anyway).
    */
+  canEditRequirements(portal: string): boolean {
+    const role = this.clientRole(portal);
+    return !!role && REQUIREMENT_EDIT_ROLES.includes(role);
+  }
+
+  /** Add Candidate button: Admin and Recruiter only. The server refuses everyone else too. */
+  canAddCandidates(portal: string): boolean {
+    const role = this.clientRole(portal);
+    return role === 'ADMIN' || role === 'RECRUITER';
+  }
+
+  /** Manager is view-only on a client website. */
+  isViewOnly(portal: string): boolean {
+    return this.clientRole(portal) === 'MANAGER';
+  }
+
+  /** Footer editor visibility: Admin, Recruiter and CLIENT_ADMIN only. */
   canEditFooter(portal: string): boolean {
-    return this.isClientLoggedIn(portal);
+    const role = this.clientRole(portal);
+    return !!role && FOOTER_EDIT_ROLES.includes(role);
   }
 
   /**

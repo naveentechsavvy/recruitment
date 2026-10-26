@@ -16,12 +16,14 @@ import java.util.Set;
 
 /**
  * THE rule for who may do what with a candidate. Nothing else in the app decides this.
- *  - ADMIN and RECRUITER: may screen candidates and edit every stage.
+ *  - ADMIN: may screen candidates and edit every stage, including releasing an offer.
+ *  - RECRUITER: may screen candidates and edit every stage EXCEPT "offer-released" (only HR BP or admin releases an offer).
  *  - HIRING_MANAGER: may only VIEW candidates of jobs he owns, and may edit ONLY "hiring-manager-review",
  *    ONLY while it is the candidate's current stage and ONLY after the recruiter has finished screening.
- *  - MANAGER: sees every candidate of his portal and may edit ONLY "manager-round" (same current-stage rules).
+ *  - MANAGER: sees every candidate of his portal. VIEW ONLY, edits no stage.
  *  - HR_BP: sees every candidate of his portal and may edit ONLY the HR stages: "hr-round",
- *    "compensation-discussion" and "background-verification" (same current-stage rules).
+ *    "compensation-discussion", "background-verification" and RELEASE THE OFFER ("offer-released")
+ *    (same current-stage rules).
  *  Nobody can edit a stage of a frozen portal: PortalGuard blocks it in the services.
  */
 @Component
@@ -29,8 +31,10 @@ public class StagePermissionService {
 
     public static final String HIRING_MANAGER_STAGE = "hiring-manager-review";
     public static final String SCREENING_STAGE = "resume-screening";
-    public static final Set<String> MANAGER_STAGES = Set.of("manager-round");
-    public static final Set<String> HR_BP_STAGES = Set.of("hr-round", "compensation-discussion", "background-verification");
+    public static final String OFFER_RELEASE_STAGE = "offer-released";
+    /** Manager is view-only. Kept as a set so a stage can be given back later without touching the logic. */
+    public static final Set<String> MANAGER_STAGES = Set.of();
+    public static final Set<String> HR_BP_STAGES = Set.of("hr-round", "compensation-discussion", "background-verification", OFFER_RELEASE_STAGE);
 
     public boolean isRecruiterOrAdmin(AuthUser user) {
         return user != null && (user.role() == Role.ADMIN || user.role() == Role.RECRUITER);
@@ -68,7 +72,10 @@ public class StagePermissionService {
     /** Null means allowed; otherwise the reason it is not. */
     private String denialReason(AuthUser user, Candidate candidate, String stageCode) {
         if (user == null) return "Please log in";
-        if (isRecruiterOrAdmin(user)) return null;
+        if (user.role() == Role.ADMIN) return null;
+        if (user.role() == Role.RECRUITER) {
+            return OFFER_RELEASE_STAGE.equals(stageCode) ? "Only an HR BP can release an offer" : null;
+        }
         if (user.role() == Role.MANAGER || user.role() == Role.HR_BP) return denialForStageOwner(user, candidate, stageCode);
         if (user.role() != Role.HIRING_MANAGER) return "You do not have permission to edit stages";
 
@@ -94,8 +101,8 @@ public class StagePermissionService {
         boolean manager = user.role() == Role.MANAGER;
         Set<String> allowed = manager ? MANAGER_STAGES : HR_BP_STAGES;
         if (!allowed.contains(stageCode)) {
-            return manager ? "A manager can only edit the Manager Round stage"
-                    : "An HR BP can only edit the HR Round, Compensation Discussion and Background Verification stages";
+            return manager ? "A manager has view-only access"
+                    : "An HR BP can only edit the HR Round, Compensation Discussion, Background Verification and Offer Released stages";
         }
         if (!Objects.equals(user.clientId(), candidate.getClient().getId())) {
             return "You can only access your own client's data";

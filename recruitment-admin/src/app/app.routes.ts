@@ -1,6 +1,6 @@
-
 import { Routes } from '@angular/router';
 import { authGuard, clientGuard, roleGuard } from './core/guards/auth.guard';
+import { clientRoleGuard } from './core/guards/client-role.guard';
 
 export const routes: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'admin/login' },
@@ -174,7 +174,78 @@ export const routes: Routes = [
         .then((m) => m.ClientLoginComponent),
   },
 
-  // Public client application (needs a login for this client)
+  // Management pages inside the logged-in client's website
+  {
+    path: 'app/:slug/manage',
+    canActivate: [clientGuard],
+    loadComponent: () =>
+      import('./features/public/manage/site-manage-layout.component')
+        .then((m) => m.SiteManageLayoutComponent),
+
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'requirements' },
+
+      {
+        path: 'requirements',
+        loadComponent: () =>
+          import('./features/public/manage/site-requirement-list.component')
+            .then((m) => m.SiteRequirementListComponent),
+      },
+
+      // Create requirement (Admin and Recruiter only)
+      {
+        path: 'requirements/create',
+        canActivate: [clientRoleGuard(['ADMIN', 'RECRUITER'])],
+        loadComponent: () =>
+          import('./features/public/manage/site-requirement-form.component')
+            .then((m) => m.SiteRequirementFormComponent),
+      },
+
+      // View requirement
+      {
+        path: 'requirements/view/:id',
+        loadComponent: () =>
+          import('./features/public/manage/site-requirement-details.component')
+            .then((m) => m.SiteRequirementDetailsComponent),
+      },
+
+      // Edit requirement (Admin and Recruiter only)
+      {
+        path: 'requirements/edit/:id',
+        canActivate: [clientRoleGuard(['ADMIN', 'RECRUITER'])],
+        loadComponent: () =>
+          import('./features/public/manage/site-requirement-form.component')
+            .then((m) => m.SiteRequirementFormComponent),
+      },
+
+      // Candidates for a requirement
+      {
+        path: 'requirements/:id/candidates',
+        loadComponent: () =>
+          import('./features/public/manage/site-candidate-list.component')
+            .then((m) => m.SiteCandidateListComponent),
+      },
+
+      // Add candidate to a requirement (Admin and Recruiter only)
+      {
+        path: 'requirements/:id/candidates/new',
+        canActivate: [clientRoleGuard(['ADMIN', 'RECRUITER'])],
+        loadComponent: () =>
+          import('./features/public/manage/site-candidate-form.component')
+            .then((m) => m.SiteCandidateFormComponent),
+      },
+
+      // Candidate profile, resume, screening, stages and history
+      {
+        path: 'candidates/:candidateId',
+        loadComponent: () =>
+          import('./features/public/manage/site-candidate-details.component')
+            .then((m) => m.SiteCandidateDetailsComponent),
+      },
+    ],
+  },
+
+  // Public client application
   {
     path: 'app/:slug',
     canActivate: [clientGuard],
