@@ -35,8 +35,8 @@ export class CandidateService {
     return this.http.post<Candidate>(`${this.url}/candidates/${id}/remarks`, { text });
   }
 
-  updateStage(id: number, stageCode: string, decision: StageDecision, notes: string): Observable<Candidate> {
-    return this.http.put<Candidate>(`${this.url}/candidates/${id}/stages/${encodeURIComponent(stageCode)}`, { decision, notes });
+  updateStage(id: number, stageCode: string, decision: StageDecision, notes: string, rating: number | null = null): Observable<Candidate> {
+    return this.http.put<Candidate>(`${this.url}/candidates/${id}/stages/${encodeURIComponent(stageCode)}`, { decision, notes, rating });
   }
 
   /** Replaces the resume of an existing candidate. The form carries one file in the field "resume". */

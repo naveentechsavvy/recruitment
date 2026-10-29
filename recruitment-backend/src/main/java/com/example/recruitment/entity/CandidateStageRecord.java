@@ -23,11 +23,15 @@ public class CandidateStageRecord {
     private RecruitmentProcess process;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20)")
     private StageDecision decision = StageDecision.PENDING;
 
     @Column(length = 1000)
     private String notes;
+
+    /** 1 to 5. Only the technical rounds use it. */
+    @Column
+    private Integer rating;
 
     /** Email of the person who last changed this stage. */
     @Column(name = "updated_by", length = 150)
@@ -45,6 +49,8 @@ public class CandidateStageRecord {
     public void setDecision(StageDecision decision) { this.decision = decision; }
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+    public Integer getRating() { return rating; }
+    public void setRating(Integer rating) { this.rating = rating; }
     public String getUpdatedBy() { return updatedBy; }
     public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
     public Instant getUpdatedAt() { return updatedAt; }

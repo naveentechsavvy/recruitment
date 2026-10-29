@@ -16,10 +16,11 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * At every start, makes sure the 18 standard recruitment stages exist with the right name and description.
+ * At every start, makes sure the standard recruitment stages exist with the right name and description.
  * Missing stages are added. Existing stages keep their id (so no client or candidate loses a link),
  * only their name and description are brought up to date. Stages not in this list
- * (the older "technical-round" and "rejected") are left exactly as they are.
+ * (the older "technical-round" and "rejected", and "interview-feedback", which is no longer offered)
+ * are left exactly as they are.
  *
  * The classification (Standard / Recommended / Optional) and the display order are admin-form settings
  * and live in the Angular stage list. The order a client uses is saved per client in client_processes.
@@ -36,7 +37,6 @@ public class DataSeeder implements CommandLineRunner {
             new String[]{"technical-round-l1", "Technical Round L1", "First-level technical interview or assessment."},
             new String[]{"technical-round-l2", "Technical Round L2", "Second-level technical interview or assessment."},
             new String[]{"technical-functional-assessment", "Technical / Functional Assessment", "Candidate completes a coding test, assignment, skill test, or functional assessment."},
-            new String[]{"interview-feedback", "Interview Feedback", "Interviewers submit ratings, comments, and recommendations."},
             new String[]{"manager-round", "Manager Round", "Hiring manager or project manager evaluates experience, delivery skills, and team fit."},
             new String[]{"hr-round", "HR Round", "HR evaluates communication, culture fit, availability, and employment details."},
             new String[]{"compensation-discussion", "Compensation Discussion", "Recruiter discusses salary expectations, budget, notice period, and benefits."},

@@ -43,8 +43,8 @@ export class SiteCandidateApi {
     return this.http.post<Candidate>(`${this.url}/candidates/${id}/remarks`, { text }, { context: this.context });
   }
 
-  updateStage(id: number, stageCode: string, decision: StageDecision, notes: string): Observable<Candidate> {
-    return this.http.put<Candidate>(`${this.url}/candidates/${id}/stages/${encodeURIComponent(stageCode)}`, { decision, notes }, { context: this.context });
+  updateStage(id: number, stageCode: string, decision: StageDecision, notes: string, rating: number | null = null): Observable<Candidate> {
+    return this.http.put<Candidate>(`${this.url}/candidates/${id}/stages/${encodeURIComponent(stageCode)}`, { decision, notes, rating }, { context: this.context });
   }
 
   replaceResume(id: number, file: File): Observable<Candidate> {

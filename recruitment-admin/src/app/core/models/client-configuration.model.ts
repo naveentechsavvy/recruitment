@@ -11,7 +11,6 @@ export type StageId =
   | 'technical-round-l1'
   | 'technical-round-l2'
   | 'technical-functional-assessment'
-  | 'interview-feedback'
   | 'manager-round'
   | 'hr-round'
   | 'compensation-discussion'
@@ -37,7 +36,7 @@ export interface StageOption {
 
 /**
  * Predefined order. Selected stages are always stored in this order.
- * The 18 stages of the recruitment process, plus two older ones (flagged legacy) so existing clients keep working.
+ * The stages of the recruitment process, plus two older ones (flagged legacy) so existing clients keep working.
  * Keep the names and descriptions in step with DataSeeder.java in the backend.
  */
 export const STAGE_OPTIONS: readonly StageOption[] = [
@@ -49,7 +48,6 @@ export const STAGE_OPTIONS: readonly StageOption[] = [
   { id: 'technical-round-l1', label: 'Technical Round L1', classification: 'Optional', description: 'First-level technical interview or assessment.' },
   { id: 'technical-round-l2', label: 'Technical Round L2', classification: 'Optional', description: 'Second-level technical interview or assessment.' },
   { id: 'technical-functional-assessment', label: 'Technical / Functional Assessment', classification: 'Optional', description: 'Candidate completes a coding test, assignment, skill test, or functional assessment.' },
-  { id: 'interview-feedback', label: 'Interview Feedback', classification: 'Standard', description: 'Interviewers submit ratings, comments, and recommendations.' },
   { id: 'manager-round', label: 'Manager Round', classification: 'Optional', description: 'Hiring manager or project manager evaluates experience, delivery skills, and team fit.' },
   { id: 'hr-round', label: 'HR Round', classification: 'Standard', description: 'HR evaluates communication, culture fit, availability, and employment details.' },
   { id: 'compensation-discussion', label: 'Compensation Discussion', classification: 'Standard', description: 'Recruiter discusses salary expectations, budget, notice period, and benefits.' },

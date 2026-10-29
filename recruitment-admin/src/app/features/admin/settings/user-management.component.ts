@@ -96,6 +96,7 @@ interface RoleAssignment {
             <option value="HIRING_MANAGER">Hiring Manager</option>
             <option value="MANAGER">Manager</option>
             <option value="HR_BP">HR BP</option>
+            <option value="CLIENT_ADMIN">Client Admin</option>
           </select>
         </label>
 

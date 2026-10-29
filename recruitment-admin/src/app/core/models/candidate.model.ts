@@ -1,6 +1,6 @@
 export type CandidateStatus = 'ACTIVE' | 'ON_HOLD' | 'REJECTED' | 'COMPLETED';
 export type ScreeningStatus = 'PENDING' | 'PROCEEDED' | 'ON_HOLD' | 'REJECTED';
-export type StageDecision = 'PENDING' | 'APPROVED' | 'REJECTED';
+export type StageDecision = 'PENDING' | 'APPROVED' | 'REJECTED' | 'HOLD';
 export type ScreeningAction = 'PROCEED' | 'REJECT' | 'ON_HOLD';
 export type EventType =
   | 'APPLIED' | 'RESUME_UPLOADED' | 'SCREENING_UPDATED' | 'SCREENING_PROCEEDED' | 'SCREENING_ON_HOLD'
@@ -13,6 +13,8 @@ export interface CandidateStage {
   description: string | null;
   decision: StageDecision;
   notes: string | null;
+  /** 1 to 5. Only the technical rounds use it. */
+  rating: number | null;
   updatedBy: string | null;
   updatedAt: string | null;
   current: boolean;

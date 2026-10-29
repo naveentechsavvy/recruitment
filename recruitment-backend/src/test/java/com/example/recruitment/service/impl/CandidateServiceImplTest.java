@@ -11,6 +11,7 @@ import com.example.recruitment.entity.CandidateStageRecord;
 import com.example.recruitment.entity.CandidateStatus;
 import com.example.recruitment.entity.Client;
 import com.example.recruitment.entity.ClientProcess;
+import com.example.recruitment.entity.ClientStatus;
 import com.example.recruitment.entity.EventType;
 import com.example.recruitment.entity.RecruitmentProcess;
 import com.example.recruitment.entity.Requirement;
@@ -18,7 +19,6 @@ import com.example.recruitment.entity.Role;
 import com.example.recruitment.entity.ScreeningAction;
 import com.example.recruitment.entity.ScreeningStatus;
 import com.example.recruitment.entity.StageDecision;
-import com.example.recruitment.entity.ClientStatus;
 import com.example.recruitment.exception.PortalFrozenException;
 import com.example.recruitment.exception.ResourceNotFoundException;
 import com.example.recruitment.repository.CandidateEventRepository;
@@ -94,6 +94,7 @@ class CandidateServiceImplTest {
 
         screening = process(2L, StagePermissionService.SCREENING_STAGE, "Resume Screening");
         managerReview = process(3L, StagePermissionService.HIRING_MANAGER_STAGE, "Hiring Manager Review");
+
         when(clientProcesses.findByClientIdOrderByDisplayOrderAsc(1L))
                 .thenReturn(List.of(link(client, screening, 1), link(client, managerReview, 2)));
 
@@ -128,7 +129,8 @@ class CandidateServiceImplTest {
     @Test
     void rejectWithoutRemarksIsBlocked() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, null), recruiter));
         assertTrue(e.getMessage().toLowerCase().contains("reason"));
         assertUntouched();
     }
@@ -136,7 +138,8 @@ class CandidateServiceImplTest {
     @Test
     void rejectWithWhitespaceOnlyRemarksIsBlocked() {
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "   \t "), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "   \t "), recruiter));
         assertUntouched();
     }
 
@@ -148,31 +151,39 @@ class CandidateServiceImplTest {
         assertEquals(ScreeningStatus.REJECTED, r.screeningStatus());
         assertEquals(CandidateStatus.REJECTED, candidate.getStatus());
         assertEquals(1, eventsOfType(EventType.SCREENING_REJECTED).size());
+
         CandidateEvent event = eventsOfType(EventType.SCREENING_REJECTED).get(0);
-        assertEquals("Skills do not match", event.getDetails());      // trimmed
-        assertEquals("rec@example.com", event.getActor());            // from the login, not the request
+        assertEquals("Skills do not match", event.getDetails());
+        assertEquals("rec@example.com", event.getActor());
         assertEquals(1, savedRecords.size());
         assertEquals(StageDecision.REJECTED, savedRecords.get(0).getDecision());
     }
 
     @Test
     void rejectingTwiceIsBlockedAndWritesNoSecondHistoryEntry() {
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
+
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter));
         assertEquals(1, eventsOfType(EventType.SCREENING_REJECTED).size());
     }
 
     @Test
     void rejectedCandidateCannotProceedOrBeMovedForward() {
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
         fillScreeningDetails();
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+
         assertThrows(IllegalArgumentException.class,
                 () -> service.updateStage(100L, StagePermissionService.SCREENING_STAGE,
-                        new StageUpdateRequest(StageDecision.APPROVED, null), recruiter));
+                        new StageUpdateRequest(StageDecision.APPROVED, null, null), recruiter));
+
         assertEquals(CandidateStatus.REJECTED, candidate.getStatus());
         assertEquals(screening, candidate.getCurrentProcess());
     }
@@ -182,7 +193,8 @@ class CandidateServiceImplTest {
     @Test
     void onHoldWithoutReasonIsBlocked() {
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, " "), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.ON_HOLD, " "), recruiter));
         assertUntouched();
     }
 
@@ -199,20 +211,25 @@ class CandidateServiceImplTest {
 
     @Test
     void onHoldTwiceIsBlockedWithoutDuplicateHistory() {
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
+
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter));
         assertEquals(1, eventsOfType(EventType.SCREENING_ON_HOLD).size());
     }
 
     @Test
     void candidateOnHoldCannotAdvanceThroughStageControls() {
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
         fillScreeningDetails();
 
         assertThrows(IllegalArgumentException.class,
                 () -> service.updateStage(100L, StagePermissionService.SCREENING_STAGE,
-                        new StageUpdateRequest(StageDecision.APPROVED, null), recruiter));
+                        new StageUpdateRequest(StageDecision.APPROVED, null, null), recruiter));
+
         assertEquals(screening, candidate.getCurrentProcess());
     }
 
@@ -221,7 +238,9 @@ class CandidateServiceImplTest {
     @Test
     void proceedIsBlockedWhenScreeningDetailsAreMissing() {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+
         assertTrue(e.getMessage().contains("Current CTC"));
         assertEquals(ScreeningStatus.PENDING, candidate.getScreeningStatus());
         assertTrue(savedEvents.isEmpty());
@@ -233,7 +252,9 @@ class CandidateServiceImplTest {
         candidate.setResumeFile(null);
 
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+
         assertTrue(e.getMessage().toLowerCase().contains("resume"));
         assertEquals(ScreeningStatus.PENDING, candidate.getScreeningStatus());
     }
@@ -252,7 +273,6 @@ class CandidateServiceImplTest {
         assertEquals(1, eventsOfType(EventType.STAGE_MOVED).size());
         assertEquals("rec@example.com", eventsOfType(EventType.SCREENING_PROCEEDED).get(0).getActor());
 
-        // Only the screening stage is approved. The manager's stage is NOT decided for them.
         assertEquals(1, savedRecords.size());
         assertEquals(StagePermissionService.SCREENING_STAGE, savedRecords.get(0).getProcess().getCode());
         assertEquals(StageDecision.APPROVED, savedRecords.get(0).getDecision());
@@ -261,20 +281,24 @@ class CandidateServiceImplTest {
     @Test
     void proceedingTwiceIsBlockedWithoutDuplicateHistory() {
         fillScreeningDetails();
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter);
         int eventsAfterFirst = savedEvents.size();
 
         assertThrows(IllegalArgumentException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
         assertEquals(eventsAfterFirst, savedEvents.size());
     }
 
     @Test
     void candidateOnHoldCanLaterProceed() {
         fillScreeningDetails();
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), recruiter);
 
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter);
 
         assertEquals(CandidateStatus.ACTIVE, candidate.getStatus());
         assertEquals(ScreeningStatus.PROCEEDED, candidate.getScreeningStatus());
@@ -286,7 +310,8 @@ class CandidateServiceImplTest {
     @Test
     void screeningDetailsAreSavedTrimmedAndLoggedOnlyWhenChanged() {
         ScreeningUpdateRequest request = new ScreeningUpdateRequest(
-                new BigDecimal("5.5"), new BigDecimal("3"), new BigDecimal("800000"), new BigDecimal("1200000"),
+                new BigDecimal("5.5"), new BigDecimal("3"),
+                new BigDecimal("800000"), new BigDecimal("1200000"),
                 30, "  Flutter, Dart  ", "  Strong communicator ");
 
         service.updateScreening(100L, request, recruiter);
@@ -297,16 +322,19 @@ class CandidateServiceImplTest {
         assertEquals(1, eventsOfType(EventType.REMARK).size());
         assertEquals("Strong communicator", eventsOfType(EventType.REMARK).get(0).getDetails());
 
-        // Same values again: no new "details updated" entry.
         service.updateScreening(100L, new ScreeningUpdateRequest(
-                new BigDecimal("5.5"), new BigDecimal("3"), new BigDecimal("800000"), new BigDecimal("1200000"),
+                new BigDecimal("5.5"), new BigDecimal("3"),
+                new BigDecimal("800000"), new BigDecimal("1200000"),
                 30, "Flutter, Dart", null), recruiter);
+
         assertEquals(1, eventsOfType(EventType.SCREENING_UPDATED).size());
     }
 
     @Test
     void screeningDetailsAreLockedForRejectedCandidate() {
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter);
+
         assertThrows(IllegalArgumentException.class, () -> service.updateScreening(100L,
                 new ScreeningUpdateRequest(null, null, null, null, null, "Java", null), recruiter));
     }
@@ -316,15 +344,19 @@ class CandidateServiceImplTest {
     @Test
     void hiringManagerCannotRunScreeningActions() {
         assertThrows(AccessDeniedException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No"), hiringManager));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "No"), hiringManager));
+
         assertThrows(AccessDeniedException.class, () -> service.updateScreening(100L,
                 new ScreeningUpdateRequest(null, null, null, null, null, null, null), hiringManager));
+
         assertEquals(CandidateStatus.ACTIVE, candidate.getStatus());
     }
 
     @Test
     void recruiterLimitedToAnotherClientCannotTouchTheCandidate() {
         AuthUser otherClientRecruiter = new AuthUser(5L, "other@example.com", Role.RECRUITER, 77L);
+
         assertThrows(AccessDeniedException.class, () -> service.screeningAction(100L,
                 new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Waiting"), otherClientRecruiter));
     }
@@ -332,15 +364,19 @@ class CandidateServiceImplTest {
     @Test
     void hiringManagerCannotEditStagesBeforeScreeningIsDone() {
         assertThrows(AccessDeniedException.class, () -> service.updateStage(100L,
-                StagePermissionService.HIRING_MANAGER_STAGE, new StageUpdateRequest(StageDecision.APPROVED, null), hiringManager));
+                StagePermissionService.HIRING_MANAGER_STAGE,
+                new StageUpdateRequest(StageDecision.APPROVED, null, null), hiringManager));
     }
 
     @Test
     void missingCandidateGivesNotFound() {
         assertThrows(ResourceNotFoundException.class,
-                () -> service.screeningAction(999L, new ScreeningActionRequest(ScreeningAction.REJECT, "x"), recruiter));
-        assertThrows(ResourceNotFoundException.class,
-                () -> service.updateScreening(999L, new ScreeningUpdateRequest(null, null, null, null, null, null, null), recruiter));
+                () -> service.screeningAction(999L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "x"), recruiter));
+
+        assertThrows(ResourceNotFoundException.class, () -> service.updateScreening(999L,
+                new ScreeningUpdateRequest(null, null, null, null, null, null, null), recruiter));
+
         assertThrows(ResourceNotFoundException.class, () -> service.getResume(999L, recruiter));
     }
 
@@ -350,11 +386,11 @@ class CandidateServiceImplTest {
         assertThrows(ResourceNotFoundException.class, () -> service.getResume(100L, recruiter));
     }
 
-
     // ---------------------------------------------------------------- frozen portal
 
     private MockMultipartFile somePdf() {
-        return new MockMultipartFile("resume", "cv.pdf", "application/pdf", "%PDF-1.4 test".getBytes());
+        return new MockMultipartFile(
+                "resume", "cv.pdf", "application/pdf", "%PDF-1.4 test".getBytes());
     }
 
     @Test
@@ -363,17 +399,29 @@ class CandidateServiceImplTest {
         candidate.getClient().setFrozen(true);
 
         assertThrows(PortalFrozenException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.PROCEED, null), recruiter));
+
         assertThrows(PortalFrozenException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "No fit"), recruiter));
+
         assertThrows(PortalFrozenException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter));
+
         assertThrows(PortalFrozenException.class, () -> service.updateScreening(100L,
                 new ScreeningUpdateRequest(null, null, null, null, null, "Java", null), recruiter));
-        assertThrows(PortalFrozenException.class, () -> service.addRemark(100L, new RemarkRequest("hello"), recruiter));
-        assertThrows(PortalFrozenException.class, () -> service.replaceResume(100L, somePdf(), recruiter));
-        assertThrows(PortalFrozenException.class, () -> service.updateStage(100L, StagePermissionService.SCREENING_STAGE,
-                new StageUpdateRequest(StageDecision.APPROVED, null), recruiter));
+
+        assertThrows(PortalFrozenException.class,
+                () -> service.addRemark(100L, new RemarkRequest("hello"), recruiter));
+
+        assertThrows(PortalFrozenException.class,
+                () -> service.replaceResume(100L, somePdf(), recruiter));
+
+        assertThrows(PortalFrozenException.class,
+                () -> service.updateStage(100L, StagePermissionService.SCREENING_STAGE,
+                        new StageUpdateRequest(StageDecision.APPROVED, null, null), recruiter));
 
         assertEquals(ScreeningStatus.PENDING, candidate.getScreeningStatus());
         assertEquals(CandidateStatus.ACTIVE, candidate.getStatus());
@@ -387,6 +435,7 @@ class CandidateServiceImplTest {
         candidate.getClient().setFrozen(true);
         candidate.getClient().setSlug("acme");
         candidate.getClient().setStatus(ClientStatus.ACTIVE);
+
         when(clients.findBySlug("acme")).thenReturn(Optional.of(candidate.getClient()));
 
         PortalFrozenException e = assertThrows(PortalFrozenException.class,
@@ -404,6 +453,7 @@ class CandidateServiceImplTest {
 
         assertThrows(PortalFrozenException.class,
                 () -> service.addCandidate(10L, "New Person", "new@example.com", null, somePdf(), recruiter));
+
         verify(candidates, never()).save(any(Candidate.class));
     }
 
@@ -413,7 +463,7 @@ class CandidateServiceImplTest {
 
         CandidateResponse r = service.getCandidate(100L, recruiter);
 
-        assertEquals("Asha Rao", r.fullName()); // the data is intact and readable
+        assertEquals("Asha Rao", r.fullName());
         assertFalse(r.canScreen());
         assertFalse(r.canRemark());
         assertTrue(r.stages().stream().noneMatch(st -> st.canEdit()));
@@ -422,11 +472,15 @@ class CandidateServiceImplTest {
     @Test
     void unfreezingRestoresTheActions() {
         candidate.getClient().setFrozen(true);
+
         assertThrows(PortalFrozenException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter));
 
         candidate.getClient().setFrozen(false);
-        service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter);
+
+        service.screeningAction(100L,
+                new ScreeningActionRequest(ScreeningAction.ON_HOLD, "Wait"), recruiter);
 
         assertEquals(CandidateStatus.ON_HOLD, candidate.getStatus());
         assertTrue(service.getCandidate(100L, recruiter).canRemark());
@@ -435,8 +489,10 @@ class CandidateServiceImplTest {
     @Test
     void permissionIsCheckedBeforeFreezeSoOutsidersLearnNothingAboutIt() {
         candidate.getClient().setFrozen(true);
+
         assertThrows(AccessDeniedException.class,
-                () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No"), hiringManager));
+                () -> service.screeningAction(100L,
+                        new ScreeningActionRequest(ScreeningAction.REJECT, "No"), hiringManager));
     }
 
     // ---------------------------------------------------------------- the new roles on candidates
@@ -448,18 +504,26 @@ class CandidateServiceImplTest {
 
         for (AuthUser u : new AuthUser[]{hrbp, manager}) {
             CandidateResponse r = service.getCandidate(100L, u);
+
             assertEquals("Asha Rao", r.fullName());
             assertFalse(r.canScreen());
-            assertFalse(r.canRemark());
+
             assertThrows(AccessDeniedException.class,
-                    () -> service.screeningAction(100L, new ScreeningActionRequest(ScreeningAction.REJECT, "No"), u));
+                    () -> service.screeningAction(100L,
+                            new ScreeningActionRequest(ScreeningAction.REJECT, "No"), u));
         }
+
+        // A manager may add comments. An HR BP may not.
+        assertFalse(service.getCandidate(100L, hrbp).canRemark());
+        assertTrue(service.getCandidate(100L, manager).canRemark());
     }
 
     @Test
     void hrBpOfAnotherPortalCannotOpenTheCandidate() {
         AuthUser otherPortal = new AuthUser(8L, "hrbp@example.com", Role.HR_BP, 77L);
-        assertThrows(AccessDeniedException.class, () -> service.getCandidate(100L, otherPortal));
+
+        assertThrows(AccessDeniedException.class,
+                () -> service.getCandidate(100L, otherPortal));
     }
 
     // ---------------------------------------------------------------- helpers

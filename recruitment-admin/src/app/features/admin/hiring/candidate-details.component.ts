@@ -241,6 +241,31 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
           </div>
         </div>
       }
+
+      <!-- NEW: stage Approve / Reject confirmation (replaces the browser confirm) -->
+      @if (stageDialog) {
+        <div class="backdrop" (click)="closeStageDialog()">
+          <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="stg-title" (click)="$event.stopPropagation()">
+            <h3 id="stg-title">
+              {{ stageDialog.decision === 'APPROVED' ? 'Approve' : 'Reject' }} {{ candidate.fullName }}?
+            </h3>
+            <p>
+              {{ stageDialog.decision === 'APPROVED' ? 'Approve' : 'Reject' }}
+              this candidate at "{{ stageDialog.stage.name }}"?
+            </p>
+            @if (stageDialogError) { <span class="error" role="alert">{{ stageDialogError }}</span> }
+            <div class="actions" style="justify-content:flex-end">
+              <button class="btn" type="button" [disabled]="busy" (click)="closeStageDialog()">Cancel</button>
+              <button class="btn" type="button"
+                      [class.primary]="stageDialog.decision === 'APPROVED'"
+                      [class.danger]="stageDialog.decision === 'REJECTED'"
+                      [disabled]="busy" (click)="confirmStageDialog()">
+                {{ busy ? 'Working…' : (stageDialog.decision === 'APPROVED' ? 'Approve' : 'Reject') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      }
     }
   `,
 })
@@ -268,6 +293,10 @@ export class CandidateDetailsComponent implements OnDestroy {
   dialogRemarks = '';
   dialogError = '';
 
+  /** NEW: the stage decision dialog (Approve or Reject at a hiring stage). */
+  stageDialog: { stage: CandidateStage; decision: StageDecision } | null = null;
+  stageDialogError = '';
+
   /** Once the recruiter tries to save or proceed, empty required fields are marked. */
   private submitted = false;
 
@@ -283,8 +312,13 @@ export class CandidateDetailsComponent implements OnDestroy {
 
   ngOnDestroy() { clearTimeout(this.noticeTimer); }
 
+  // CHANGED: Escape also closes the stage dialog
   @HostListener('document:keydown.escape')
-  onEscape() { if (this.dialog && !this.busy) this.closeDialog(); }
+  onEscape() {
+    if (this.busy) return;
+    if (this.dialog) this.closeDialog();
+    else if (this.stageDialog) this.closeStageDialog();
+  }
 
   /** Remarks only, in the order they were written. */
   get remarks(): TimelineEvent[] {
@@ -477,11 +511,29 @@ export class CandidateDetailsComponent implements OnDestroy {
     this.run(this.service.addRemark(this.candidate.id, this.newRemark.trim()), 'Remark added.', () => { this.newRemark = ''; });
   }
 
+  // CHANGED: opens the in-page dialog instead of the browser confirm()
   decide(stage: CandidateStage, decision: StageDecision) {
     if (!this.candidate || this.busy) return;
-    const verb = decision === 'APPROVED' ? 'Approve' : 'Reject';
-    if (!confirm(`${verb} ${this.candidate.fullName} at "${stage.name}"?`)) return;
-    this.run(this.service.updateStage(this.candidate.id, stage.code, decision, (this.notes[stage.code] ?? '').trim()), `${stage.name}: ${decision === 'APPROVED' ? 'approved' : 'rejected'}.`);
+    this.stageDialogError = '';
+    this.stageDialog = { stage, decision };
+  }
+
+  // NEW
+  closeStageDialog() {
+    if (this.busy) return;
+    this.stageDialog = null;
+    this.stageDialogError = '';
+  }
+
+  // NEW: runs the decision once the recruiter confirms in the dialog
+  confirmStageDialog() {
+    if (!this.candidate || !this.stageDialog || this.busy) return;
+    const { stage, decision } = this.stageDialog;
+    this.run(
+      this.service.updateStage(this.candidate.id, stage.code, decision, (this.notes[stage.code] ?? '').trim()),
+      `${stage.name}: ${decision === 'APPROVED' ? 'approved' : 'rejected'}.`,
+      () => { this.stageDialog = null; this.stageDialogError = ''; },
+    );
   }
 
   // ---------------------------------------------------------------- helpers
@@ -504,7 +556,10 @@ export class CandidateDetailsComponent implements OnDestroy {
       error: (err: HttpErrorResponse) => {
         this.busy = false;
         const message = errorText(err);
-        if (this.dialog) this.dialogError = message; else this.error = message;
+        // CHANGED: errors show inside whichever dialog is open
+        if (this.dialog) this.dialogError = message;
+        else if (this.stageDialog) this.stageDialogError = message;
+        else this.error = message;
         if (reloadOnError && this.candidate) {
           this.service.getById(String(this.candidate.id)).subscribe({ next: (c) => this.refreshKeepingForm(c) });
         }

@@ -48,7 +48,8 @@ public record CandidateResponse(
             String updatedBy,
             Instant updatedAt,
             boolean current,
-            boolean canEdit
+            boolean canEdit,
+            Integer rating
     ) { }
 
     public record EventView(

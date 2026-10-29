@@ -163,27 +163,6 @@
       </div>
 
       <aside class="col-side">
-        <div class="card card-body sticky" #previewCard>
-          <h2 class="card-title">Portal Preview</h2>
-          <p class="card-sub">Live · colours and footer update as you type</p>
-          <div class="mini">
-            <div class="mini-head" [style.background]="'linear-gradient(135deg,' + colors.header + ',' + colors.header2 + ')'" [style.color]="colors.onHeader">
-              <strong>{{ form.controls.applicationName.value || 'Application name' }}</strong>
-              <small>{{ form.controls.clientName.value || 'Client name' }}</small>
-            </div>
-            <div class="mini-body"><span></span><span></span><span class="short"></span></div>
-            <div class="mini-foot" [style.background]="colors.footer" [style.color]="colors.onFooter">
-              @if (footerValue.companyName.trim()) { <strong>{{ footerValue.companyName.trim() }}</strong> }
-              @if (footerValue.companyAddress.trim()) { <span>{{ footerValue.companyAddress.trim() }}</span> }
-              @if (footerValue.contactEmail.trim()) { <span>{{ footerValue.contactEmail.trim() }}</span> }
-              @if (footerValue.phone.trim()) { <span>{{ footerValue.phone.trim() }}</span> }
-              @if (footerValue.websiteUrl.trim()) { <span>{{ footerValue.websiteUrl.trim() }}</span> }
-              @if (footerValue.customText.trim()) { <span>{{ footerValue.customText.trim() }}</span> }
-              @if (footerValue.copyrightText.trim()) { <span class="copy">{{ footerValue.copyrightText.trim() }}</span> }
-              @if (!footerHasContent) { <span class="copy">Footer · {{ colors.footer }}</span> }
-            </div>
-          </div>
-        </div>
         <div class="card card-body flow">
           <h2 class="card-title">Recruitment Workflow</h2>
           <p class="card-sub">Live preview · {{ selected.length }} stage(s)</p>
