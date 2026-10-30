@@ -1,0 +1,17 @@
+# Offer of Employment
+
+Date: {{date}}
+
+Dear {{candidateName}},
+
+We are pleased to offer you the position of {{jobTitle}} at {{companyName}}.
+
+Your annual compensation (CTC) will be {{ctc}}. The other terms of your employment, including your joining date, will be shared by our HR team.
+
+This offer is subject to successful completion of the background verification and the submission of the documents requested by us.
+
+Please confirm your acceptance by replying to this email. We look forward to welcoming you to the team.
+
+Warm regards,
+{{companyName}}
+Human Resources

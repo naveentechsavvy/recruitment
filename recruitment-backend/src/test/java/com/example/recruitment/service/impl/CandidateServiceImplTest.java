@@ -11,7 +11,9 @@ import com.example.recruitment.entity.CandidateStageRecord;
 import com.example.recruitment.entity.CandidateStatus;
 import com.example.recruitment.entity.Client;
 import com.example.recruitment.entity.ClientProcess;
+import com.example.recruitment.entity.ClientRoleAssignment;
 import com.example.recruitment.entity.ClientStatus;
+import com.example.recruitment.entity.HiringManager;
 import com.example.recruitment.entity.EventType;
 import com.example.recruitment.entity.RecruitmentProcess;
 import com.example.recruitment.entity.Requirement;
@@ -25,14 +27,17 @@ import com.example.recruitment.repository.CandidateEventRepository;
 import com.example.recruitment.repository.CandidateRepository;
 import com.example.recruitment.repository.CandidateStageRecordRepository;
 import com.example.recruitment.repository.ClientProcessRepository;
+import com.example.recruitment.repository.ClientRoleAssignmentRepository;
 import com.example.recruitment.repository.ClientRepository;
 import com.example.recruitment.repository.RequirementRepository;
 import com.example.recruitment.security.AuthUser;
+import com.example.recruitment.service.OfferLetterService;
 import com.example.recruitment.service.ResumeStorageService;
 import com.example.recruitment.service.StagePermissionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -49,6 +54,8 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,6 +72,8 @@ class CandidateServiceImplTest {
     @Mock ClientRepository clients;
     @Mock ClientProcessRepository clientProcesses;
     @Mock ResumeStorageService resumeStorage;
+    @Mock OfferLetterService offerLetters;
+    @Mock ClientRoleAssignmentRepository roleAssignments;
 
     final StagePermissionService permissions = new StagePermissionService();
     final List<CandidateEvent> savedEvents = new ArrayList<>();
@@ -81,7 +90,7 @@ class CandidateServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CandidateServiceImpl(candidates, records, events, requirements, clients,
-                clientProcesses, resumeStorage, permissions);
+                clientProcesses, resumeStorage, permissions, offerLetters, roleAssignments);
 
         Client client = new Client();
         ReflectionTestUtils.setField(client, "id", 1L);
@@ -122,6 +131,75 @@ class CandidateServiceImplTest {
             savedEvents.add(inv.getArgument(0));
             return inv.getArgument(0);
         });
+    }
+
+    // ---------------------------------------------------------------- Offer letter
+
+    private final AuthUser hrBp = new AuthUser(5L, "hrbp@example.com", Role.HR_BP, 1L);
+
+    /** The candidate is at the given stage (the last one), screening is done, and the job has a hiring manager. */
+    private void candidateAtLastStage(String code, String name) {
+        RecruitmentProcess stage = process(9L, code, name);
+        when(clientProcesses.findByClientIdOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(link(candidate.getClient(), stage, 1)));
+
+        HiringManager manager = new HiringManager();
+        manager.setEmail("hm@example.com");
+        candidate.getRequirement().setHiringManager(manager);
+
+        candidate.setScreeningStatus(ScreeningStatus.PROCEEDED);
+        candidate.setStatus(CandidateStatus.ACTIVE);
+        candidate.setCurrentProcess(stage);
+
+        ClientRoleAssignment firstHrBp = mock(ClientRoleAssignment.class);
+        when(firstHrBp.getRole()).thenReturn(Role.HR_BP);
+        when(firstHrBp.getEmail()).thenReturn("hrbp@example.com");
+        ClientRoleAssignment aRecruiter = mock(ClientRoleAssignment.class);
+        when(aRecruiter.getRole()).thenReturn(Role.RECRUITER);
+        when(aRecruiter.getEmail()).thenReturn("rec@example.com");
+        when(roleAssignments.findByClientIdOrderByEmailAsc(1L)).thenReturn(List.of(aRecruiter, firstHrBp));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void approvingOfferReleasedEmailsTheLetterWithHiringManagerAndHrBpInCc() {
+        candidateAtLastStage(StagePermissionService.OFFER_RELEASE_STAGE, "Offer Released");
+        when(offerLetters.sendOffer(any(Candidate.class), any(List.class)))
+                .thenReturn(List.of("hm@example.com", "hrbp@example.com"));
+
+        service.updateStage(100L, StagePermissionService.OFFER_RELEASE_STAGE,
+                new StageUpdateRequest(StageDecision.APPROVED, "Offer approved by finance", null), hrBp);
+
+        ArgumentCaptor<List<String>> cc = ArgumentCaptor.forClass(List.class);
+        verify(offerLetters).sendOffer(eq(candidate), cc.capture());
+        assertTrue(cc.getValue().contains("hm@example.com"));
+        assertTrue(cc.getValue().contains("hrbp@example.com"));
+        assertFalse(cc.getValue().contains("rec@example.com"), "recruiters are not copied");
+
+        assertTrue(savedEvents.stream().anyMatch(e -> "Offer letter emailed".equals(e.getTitle())));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void ifTheOfferEmailFailsTheApprovalFailsToo() {
+        candidateAtLastStage(StagePermissionService.OFFER_RELEASE_STAGE, "Offer Released");
+        when(offerLetters.sendOffer(any(Candidate.class), any(List.class)))
+                .thenThrow(new IllegalArgumentException("The offer letter email could not be sent."));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.updateStage(100L, StagePermissionService.OFFER_RELEASE_STAGE,
+                        new StageUpdateRequest(StageDecision.APPROVED, "Offer approved", null), hrBp));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void otherStagesDoNotSendAnOfferLetter() {
+        candidateAtLastStage("hr-round", "HR Round");
+
+        service.updateStage(100L, "hr-round",
+                new StageUpdateRequest(StageDecision.APPROVED, "Good fit", null), hrBp);
+
+        verify(offerLetters, never()).sendOffer(any(Candidate.class), any(List.class));
     }
 
     // ---------------------------------------------------------------- Reject

@@ -144,6 +144,7 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
           <div class="card card-body">
             <h2 class="card-title">Profile</h2>
             <dl class="profile">
+              <dt>Name</dt><dd>{{ candidate.fullName }}</dd>
               <dt>Email</dt><dd>{{ candidate.email }}</dd>
               <dt>Phone</dt><dd>{{ candidate.phone || '—' }}</dd>
               <dt>Applied</dt><dd>{{ candidate.appliedAt | date: 'medium' }}</dd>
@@ -857,7 +858,10 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
     if (!d) return '';
     const at = `at "${d.stage.name}"`;
     switch (d.decision) {
-      case 'APPROVED': return `Approve this candidate ${at}? This cannot be changed afterwards.`;
+      case 'APPROVED':
+        return d.stage.code === 'offer-released'
+          ? `Approve this candidate ${at}? The offer letter (PDF) is emailed to the candidate right away, with the Hiring Manager and HR BP in copy. This cannot be changed afterwards.`
+          : `Approve this candidate ${at}? This cannot be changed afterwards.`;
       case 'REJECTED': return `Reject this candidate ${at}? This cannot be changed afterwards.`;
       case 'HOLD': return `The candidate cannot move forward while on hold ${at}. Your notes are kept in the history.`;
       default: return `The candidate becomes active again ${at}. Your notes are kept in the history.`;

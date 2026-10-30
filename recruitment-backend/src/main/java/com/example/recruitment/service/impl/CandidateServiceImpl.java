@@ -13,6 +13,7 @@ import com.example.recruitment.entity.CandidateStageRecord;
 import com.example.recruitment.entity.CandidateStatus;
 import com.example.recruitment.entity.Client;
 import com.example.recruitment.entity.ClientProcess;
+import com.example.recruitment.entity.ClientRoleAssignment;
 import com.example.recruitment.entity.ClientStatus;
 import com.example.recruitment.entity.EventType;
 import com.example.recruitment.entity.RecruitmentProcess;
@@ -27,11 +28,13 @@ import com.example.recruitment.repository.CandidateEventRepository;
 import com.example.recruitment.repository.CandidateRepository;
 import com.example.recruitment.repository.CandidateStageRecordRepository;
 import com.example.recruitment.repository.ClientProcessRepository;
+import com.example.recruitment.repository.ClientRoleAssignmentRepository;
 import com.example.recruitment.repository.ClientRepository;
 import com.example.recruitment.repository.RequirementRepository;
 import com.example.recruitment.security.AuthUser;
 import com.example.recruitment.security.ClientAccess;
 import com.example.recruitment.service.CandidateService;
+import com.example.recruitment.service.OfferLetterService;
 import com.example.recruitment.service.PortalGuard;
 import com.example.recruitment.service.ResumeStorageService;
 import com.example.recruitment.service.StagePermissionService;
@@ -69,6 +72,8 @@ public class CandidateServiceImpl implements CandidateService {
     private final ClientProcessRepository clientProcesses;
     private final ResumeStorageService resumeStorage;
     private final StagePermissionService permissions;
+    private final OfferLetterService offerLetters;
+    private final ClientRoleAssignmentRepository roleAssignments;
 
     public CandidateServiceImpl(CandidateRepository candidates,
                                 CandidateStageRecordRepository records,
@@ -77,7 +82,9 @@ public class CandidateServiceImpl implements CandidateService {
                                 ClientRepository clients,
                                 ClientProcessRepository clientProcesses,
                                 ResumeStorageService resumeStorage,
-                                StagePermissionService permissions) {
+                                StagePermissionService permissions,
+                                OfferLetterService offerLetters,
+                                ClientRoleAssignmentRepository roleAssignments) {
         this.candidates = candidates;
         this.records = records;
         this.events = events;
@@ -86,6 +93,8 @@ public class CandidateServiceImpl implements CandidateService {
         this.clientProcesses = clientProcesses;
         this.resumeStorage = resumeStorage;
         this.permissions = permissions;
+        this.offerLetters = offerLetters;
+        this.roleAssignments = roleAssignments;
     }
 
     // ---------------------------------------------------------------- creating candidates
@@ -618,10 +627,38 @@ public class CandidateServiceImpl implements CandidateService {
             } else {
                 candidate.setStatus(CandidateStatus.ACTIVE);
                 advance(candidate, stages, index, user.email());
+
+                // Approving Offer Released issues the offer: the letter is emailed to the candidate.
+                // If the email fails the whole approval is undone, so the HR BP can simply try again.
+                if (StagePermissionService.OFFER_RELEASE_STAGE.equals(stageCode)) {
+                    sendOfferLetter(candidate, user.email());
+                }
             }
         }
 
         return toResponse(candidate, user, true);
+    }
+
+    /** Emails the offer letter PDF to the candidate, with the job's hiring manager and the client's HR BPs in CC. */
+    private void sendOfferLetter(Candidate candidate, String actor) {
+        List<String> cc = new ArrayList<>();
+
+        Requirement requirement = candidate.getRequirement();
+        if (requirement != null && requirement.getHiringManager() != null) {
+            cc.add(requirement.getHiringManager().getEmail());
+        }
+
+        if (candidate.getClient() != null) {
+            roleAssignments.findByClientIdOrderByEmailAsc(candidate.getClient().getId()).stream()
+                    .filter(a -> a.getRole() == Role.HR_BP)
+                    .map(ClientRoleAssignment::getEmail)
+                    .forEach(cc::add);
+        }
+
+        List<String> sentCc = offerLetters.sendOffer(candidate, cc);
+
+        log(candidate, EventType.STAGE_DECISION, "Offer letter emailed",
+                "To: " + candidate.getEmail() + (sentCc.isEmpty() ? "" : "\nCC: " + String.join(", ", sentCc)), actor);
     }
 
     /**
