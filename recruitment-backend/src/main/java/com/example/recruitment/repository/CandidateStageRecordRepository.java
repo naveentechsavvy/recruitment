@@ -13,4 +13,7 @@ public interface CandidateStageRecordRepository extends JpaRepository<CandidateS
     List<CandidateStageRecord> findByCandidateId(Long candidateId);
 
     Optional<CandidateStageRecord> findByCandidateIdAndProcessId(Long candidateId, Long processId);
+
+    /** Used only when a candidate is deleted. */
+    void deleteByCandidateId(Long candidateId);
 }

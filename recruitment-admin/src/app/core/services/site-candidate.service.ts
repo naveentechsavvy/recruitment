@@ -3,7 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { API_BASE_URL } from '../config/api.config';
 import { CLIENT_SLUG } from '../interceptors/auth.interceptor';
-import { Candidate, ScreeningAction, ScreeningInput, StageDecision } from '../models/candidate.model';
+import { Candidate, OfferView, ScreeningAction, ScreeningInput, StageDecision } from '../models/candidate.model';
+import { PreonboardingCaseView } from '../models/preonboarding.model';
 
 /**
  * Candidate calls for ONE client website. The methods and their arguments are the same as the Admin Portal's
@@ -51,6 +52,29 @@ export class SiteCandidateApi {
     const form = new FormData();
     form.append('resume', file);
     return this.http.put<Candidate>(`${this.url}/candidates/${id}/resume`, form, { context: this.context });
+  }
+
+  /** The newest offer of this candidate. The server answers 204 (no body) when no offer was sent. */
+  getOffer(id: number): Observable<OfferView | null> {
+    return this.http.get<OfferView | null>(`${this.url}/candidates/${id}/offer`, { context: this.context });
+  }
+
+  /** The candidate's pre-onboarding case. 204 (no body) when there is none. HR BP, recruiter and admin only. */
+  getPreonboarding(id: number): Observable<PreonboardingCaseView | null> {
+    return this.http.get<PreonboardingCaseView | null>(`${this.url}/candidates/${id}/preonboarding`, { context: this.context });
+  }
+
+  resendOffer(id: number): Observable<OfferView> {
+    return this.http.post<OfferView>(`${this.url}/candidates/${id}/offer/resend`, {}, { context: this.context });
+  }
+
+  withdrawOffer(id: number): Observable<OfferView> {
+    return this.http.post<OfferView>(`${this.url}/candidates/${id}/offer/withdraw`, {}, { context: this.context });
+  }
+
+  /** Admin or recruiter only. Removes the candidate with the history, offers and resume. This cannot be undone. */
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${this.url}/candidates/${id}`, { context: this.context });
   }
 
   /** The resume is private, so it is fetched with the login token and then saved from memory. */

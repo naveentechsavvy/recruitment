@@ -116,6 +116,11 @@ public class ClientServiceImpl implements ClientService {
         List<String> resumeFiles = em.createQuery(
                 "select c.resumeFile from Candidate c where c.client.id = :id and c.resumeFile is not null", String.class)
                 .setParameter("id", id).getResultList();
+        em.createQuery("delete from PreonboardingCase p where p.client.id = :id").setParameter("id", id).executeUpdate();
+        em.createQuery("delete from PreonboardingSetting s where s.client.id = :id").setParameter("id", id).executeUpdate();
+        em.createQuery("delete from PreonboardingConfig c where c.client.id = :id").setParameter("id", id).executeUpdate();
+        em.createQuery("delete from CandidateOffer o where o.candidate.id in (select c.id from Candidate c where c.client.id = :id)")
+                .setParameter("id", id).executeUpdate();
         em.createQuery("delete from CandidateEvent e where e.candidate.id in (select c.id from Candidate c where c.client.id = :id)")
                 .setParameter("id", id).executeUpdate();
         em.createQuery("delete from CandidateStageRecord s where s.candidate.id in (select c.id from Candidate c where c.client.id = :id)")

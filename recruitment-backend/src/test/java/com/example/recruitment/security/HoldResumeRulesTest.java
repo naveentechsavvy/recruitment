@@ -111,4 +111,21 @@ class HoldResumeRulesTest {
         heldAt(StagePermissionService.SCREENING_STAGE);
         assertTrue(permissions.canEdit(recruiter, candidate, StagePermissionService.SCREENING_STAGE));
     }
+
+    @Test
+    void everyHiringManagerOfTheClientCanViewButOnlyTheOwnerCanEdit() {
+        heldAt(HM_STAGE);
+        candidate.setStatus(CandidateStatus.ACTIVE);
+
+        assertDoesNotThrow(() -> permissions.requireCanView(hiringManager, candidate));
+        assertDoesNotThrow(() -> permissions.requireCanView(otherHiringManager, candidate));
+        assertTrue(permissions.canEdit(hiringManager, candidate, HM_STAGE));
+        assertFalse(permissions.canEdit(otherHiringManager, candidate, HM_STAGE));
+    }
+
+    @Test
+    void aHiringManagerOfAnotherClientCannotViewTheCandidate() {
+        AuthUser otherClient = new AuthUser(9L, "x@example.com", Role.HIRING_MANAGER, 99L);
+        assertThrows(AccessDeniedException.class, () -> permissions.requireCanView(otherClient, candidate));
+    }
 }

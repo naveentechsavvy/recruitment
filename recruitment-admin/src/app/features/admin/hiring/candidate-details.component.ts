@@ -77,7 +77,11 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
       } @else if (candidate.status === 'ON_HOLD') {
         <div class="banner warn">This candidate is on hold and cannot move to the next stage. Choose Proceed or Reject when you are ready.</div>
       } @else if (candidate.screeningStatus === 'PROCEEDED') {
-        <div class="banner ok">Screening is complete. The candidate is ready for Hiring Manager Review.</div>
+        <div class="banner ok">
+          @if (candidate.status === 'COMPLETED') { The recruitment process is complete. }
+          @else if (candidate.currentStageCode && candidate.currentStageCode !== 'hiring-manager-review') { Screening is complete. The candidate is now at {{ candidate.currentStageName }}. }
+          @else { Screening is complete. The candidate is ready for Hiring Manager Review. }
+        </div>
       }
 
       <div class="grid">

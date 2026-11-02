@@ -103,20 +103,17 @@ public class StagePermissionService {
                 && owner.getEmail().equalsIgnoreCase(user.email());
     }
 
-    /** Checks candidate visibility for hiring managers. */
+    /**
+     * Who may open a candidate. Everyone of the client may look: a Hiring Manager, Manager and HR BP can view all
+     * candidates of their own client, never another client's. Only EDITING is limited (see denialReason), and a
+     * Hiring Manager edits only the Hiring Manager Review of a job that is assigned to him.
+     */
     public void requireCanView(AuthUser user, Candidate candidate) {
         if (user == null || candidate == null) {
             throw new AccessDeniedException("Candidate access denied");
         }
 
-        if (user.role() == Role.HIRING_MANAGER
-                && !isOwner(user, candidate.getRequirement())) {
-            throw new AccessDeniedException(
-                    "This candidate is not assigned to you"
-            );
-        }
-
-        if ((user.role() == Role.MANAGER || user.role() == Role.HR_BP)
+        if ((user.role() == Role.MANAGER || user.role() == Role.HR_BP || user.role() == Role.HIRING_MANAGER)
                 && (candidate.getClient() == null
                 || !Objects.equals(
                         user.clientId(),
@@ -128,8 +125,9 @@ public class StagePermissionService {
         }
     }
 
+    /** Active, or already offered / accepted: the remaining stages (for example Background Verification) are still open. */
     private static boolean isActive(Candidate candidate) {
-        return candidate.getStatus() == CandidateStatus.ACTIVE;
+        return candidate.getStatus() != null && candidate.getStatus().inProgress();
     }
 
     /** Roles allowed to add candidate comments. */

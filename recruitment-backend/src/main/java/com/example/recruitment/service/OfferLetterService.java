@@ -29,7 +29,9 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -76,6 +78,17 @@ public class OfferLetterService {
      * @return the CC addresses the email was really sent to
      */
     public List<String> sendOffer(Candidate candidate, List<String> cc) {
+        return sendOffer(candidate, cc, null);
+    }
+
+    /** The two buttons of the offer email. Each link opens a page where the candidate confirms the decision. */
+    public record OfferLinks(String acceptUrl, String declineUrl, Instant expiresAt) { }
+
+    /**
+     * Same as above. When links are given, the email carries an Accept Offer and a Reject Offer button instead of
+     * asking the candidate to reply. With links == null it behaves exactly as before.
+     */
+    public List<String> sendOffer(Candidate candidate, List<String> cc, OfferLinks links) {
         String to = candidate.getEmail() == null ? "" : candidate.getEmail().trim();
         if (to.isEmpty()) {
             throw new IllegalArgumentException("The candidate has no email address, so the offer letter cannot be sent");
@@ -102,11 +115,17 @@ public class OfferLetterService {
                 + "<p>Dear " + esc(name) + ",</p>"
                 + "<p>Congratulations! We are delighted to offer you the position of <strong>" + esc(job)
                 + "</strong> at <strong>" + esc(company) + "</strong>.</p>"
-                + "<p>Your offer letter is attached to this email as a PDF. Please read it and reply to this email to confirm your acceptance.</p>"
+                + "<p>Your offer letter is attached to this email as a PDF. "
+                + (links == null ? "Please read it and reply to this email to confirm your acceptance."
+                                 : "Please read it, then tell us your decision with one of the buttons below.") + "</p>"
+                + (links == null ? "" : buttonsHtml(links))
                 + "<p>Warm regards,<br>" + esc(company) + "<br>Human Resources</p></div>";
         String plain = "Dear " + name + ",\n\n"
                 + "Congratulations! We are delighted to offer you the position of " + job + " at " + company + ".\n\n"
-                + "Your offer letter is attached to this email as a PDF. Please read it and reply to this email to confirm your acceptance.\n\n"
+                + "Your offer letter is attached to this email as a PDF. "
+                + (links == null ? "Please read it and reply to this email to confirm your acceptance."
+                                 : "Please read it, then tell us your decision using the links below.") + "\n\n"
+                + (links == null ? "" : buttonsPlain(links))
                 + "Warm regards,\n" + company + "\nHuman Resources";
 
         try {
@@ -210,6 +229,33 @@ public class OfferLetterService {
         } catch (IOException e) {
             throw new IllegalStateException("The offer letter template could not be read", e);
         }
+    }
+
+    private static String buttonsHtml(OfferLinks l) {
+        return "<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin:18px 0;\"><tr>"
+                + "<td style=\"padding-right:12px;\"><a href=\"" + esc(l.acceptUrl()) + "\" style=\"display:inline-block;"
+                + "background-color:#16a34a;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 26px;border-radius:8px;\">"
+                + "Accept Offer</a></td>"
+                + "<td><a href=\"" + esc(l.declineUrl()) + "\" style=\"display:inline-block;background-color:#ffffff;color:#b42318;"
+                + "border:1px solid #b42318;text-decoration:none;font-weight:bold;padding:11px 25px;border-radius:8px;\">"
+                + "Reject Offer</a></td></tr></table>"
+                + "<p style=\"font-size:13px;color:#776b64;\">Each button opens a page where you confirm your decision. "
+                + "Nothing is decided until you confirm there." + expiryHtml(l) + "</p>";
+    }
+
+    private static String buttonsPlain(OfferLinks l) {
+        return "Accept the offer: " + l.acceptUrl() + "\n"
+                + "Reject the offer: " + l.declineUrl() + "\n\n"
+                + "Each link opens a page where you confirm your decision. Nothing is decided until you confirm there."
+                + expiryPlain(l) + "\n\n";
+    }
+
+    private static String expiryHtml(OfferLinks l) {
+        return l.expiresAt() == null ? "" : " These links work until " + DATE.format(l.expiresAt().atZone(ZoneOffset.UTC)) + ".";
+    }
+
+    private static String expiryPlain(OfferLinks l) {
+        return expiryHtml(l);
     }
 
     private static String fileName(String candidateName) {

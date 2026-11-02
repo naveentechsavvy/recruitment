@@ -31,7 +31,8 @@ import com.example.recruitment.repository.ClientRoleAssignmentRepository;
 import com.example.recruitment.repository.ClientRepository;
 import com.example.recruitment.repository.RequirementRepository;
 import com.example.recruitment.security.AuthUser;
-import com.example.recruitment.service.OfferLetterService;
+import com.example.recruitment.service.OfferService;
+import com.example.recruitment.service.PreonboardingService;
 import com.example.recruitment.service.ResumeStorageService;
 import com.example.recruitment.service.StagePermissionService;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -72,8 +74,9 @@ class CandidateServiceImplTest {
     @Mock ClientRepository clients;
     @Mock ClientProcessRepository clientProcesses;
     @Mock ResumeStorageService resumeStorage;
-    @Mock OfferLetterService offerLetters;
+    @Mock OfferService offers;
     @Mock ClientRoleAssignmentRepository roleAssignments;
+    @Mock PreonboardingService preonboarding;
 
     final StagePermissionService permissions = new StagePermissionService();
     final List<CandidateEvent> savedEvents = new ArrayList<>();
@@ -90,7 +93,7 @@ class CandidateServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new CandidateServiceImpl(candidates, records, events, requirements, clients,
-                clientProcesses, resumeStorage, permissions, offerLetters, roleAssignments);
+                clientProcesses, resumeStorage, permissions, offers, roleAssignments, preonboarding);
 
         Client client = new Client();
         ReflectionTestUtils.setField(client, "id", 1L);
@@ -164,26 +167,29 @@ class CandidateServiceImplTest {
     @SuppressWarnings("unchecked")
     void approvingOfferReleasedEmailsTheLetterWithHiringManagerAndHrBpInCc() {
         candidateAtLastStage(StagePermissionService.OFFER_RELEASE_STAGE, "Offer Released");
-        when(offerLetters.sendOffer(any(Candidate.class), any(List.class)))
+        when(offers.issue(any(Candidate.class), any(List.class), anyString()))
                 .thenReturn(List.of("hm@example.com", "hrbp@example.com"));
 
         service.updateStage(100L, StagePermissionService.OFFER_RELEASE_STAGE,
                 new StageUpdateRequest(StageDecision.APPROVED, "Offer approved by finance", null), hrBp);
 
         ArgumentCaptor<List<String>> cc = ArgumentCaptor.forClass(List.class);
-        verify(offerLetters).sendOffer(eq(candidate), cc.capture());
+        verify(offers).issue(eq(candidate), cc.capture(), eq("hrbp@example.com"));
         assertTrue(cc.getValue().contains("hm@example.com"));
         assertTrue(cc.getValue().contains("hrbp@example.com"));
         assertFalse(cc.getValue().contains("rec@example.com"), "recruiters are not copied");
 
         assertTrue(savedEvents.stream().anyMatch(e -> "Offer letter emailed".equals(e.getTitle())));
+
+        // The offer is out but not answered, so the candidate is Offered, not Completed.
+        assertEquals(CandidateStatus.OFFERED, candidate.getStatus());
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void ifTheOfferEmailFailsTheApprovalFailsToo() {
         candidateAtLastStage(StagePermissionService.OFFER_RELEASE_STAGE, "Offer Released");
-        when(offerLetters.sendOffer(any(Candidate.class), any(List.class)))
+        when(offers.issue(any(Candidate.class), any(List.class), anyString()))
                 .thenThrow(new IllegalArgumentException("The offer letter email could not be sent."));
 
         assertThrows(IllegalArgumentException.class,
@@ -199,7 +205,69 @@ class CandidateServiceImplTest {
         service.updateStage(100L, "hr-round",
                 new StageUpdateRequest(StageDecision.APPROVED, "Good fit", null), hrBp);
 
-        verify(offerLetters, never()).sendOffer(any(Candidate.class), any(List.class));
+        verify(offers, never()).issue(any(Candidate.class), any(List.class), anyString());
+    }
+
+    @Test
+    void aRecruiterCanDeleteACandidateAndEverythingThatBelongsToIt() {
+        service.deleteCandidate(100L, recruiter);
+
+        verify(offers).deleteForCandidate(100L);
+        verify(preonboarding).deleteForCandidate(100L);
+        verify(events).deleteByCandidateId(100L);
+        verify(records).deleteByCandidateId(100L);
+        verify(candidates).delete(candidate);
+        verify(resumeStorage).delete("abc.pdf");
+    }
+
+    @Test
+    void onlyAnAdminOrRecruiterCanDeleteACandidate() {
+        AuthUser manager = new AuthUser(9L, "mgr@example.com", Role.MANAGER, 1L);
+        for (AuthUser u : new AuthUser[]{hiringManager, hrBp, manager}) {
+            assertThrows(AccessDeniedException.class, () -> service.deleteCandidate(100L, u));
+        }
+        verify(candidates, never()).delete(any(Candidate.class));
+        verify(resumeStorage, never()).delete(anyString());
+    }
+
+    @Test
+    void aFrozenPortalCannotDeleteACandidate() {
+        candidate.getClient().setFrozen(true);
+
+        assertThrows(PortalFrozenException.class, () -> service.deleteCandidate(100L, recruiter));
+        verify(candidates, never()).delete(any(Candidate.class));
+    }
+
+    @Test
+    void aCandidateThatDoesNotExistCannotBeDeleted() {
+        assertThrows(ResourceNotFoundException.class, () -> service.deleteCandidate(999L, recruiter));
+    }
+
+    @Test
+    void aCandidateWhoDeclinedTheOfferCannotBeChangedAnymore() {
+        candidateAtLastStage("technical-round-l1", "Technical Round L1");
+        candidate.setStatus(CandidateStatus.DECLINED);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.updateStage(100L, "technical-round-l1",
+                        new StageUpdateRequest(StageDecision.APPROVED, "Good fit", 4), recruiter));
+    }
+
+    @Test
+    void approvingALaterStageKeepsAnAcceptedCandidateAccepted() {
+        RecruitmentProcess background = process(11L, "background-verification", "Background Verification");
+        RecruitmentProcess after = process(12L, "final-selection", "Final Selection");
+        when(clientProcesses.findByClientIdOrderByDisplayOrderAsc(1L))
+                .thenReturn(List.of(link(candidate.getClient(), background, 1), link(candidate.getClient(), after, 2)));
+        candidate.setScreeningStatus(ScreeningStatus.PROCEEDED);
+        candidate.setStatus(CandidateStatus.ACCEPTED);
+        candidate.setCurrentProcess(background);
+
+        service.updateStage(100L, "background-verification",
+                new StageUpdateRequest(StageDecision.APPROVED, "All clear", null), hrBp);
+
+        assertEquals(CandidateStatus.ACCEPTED, candidate.getStatus());
+        assertEquals(after, candidate.getCurrentProcess());
     }
 
     // ---------------------------------------------------------------- Reject

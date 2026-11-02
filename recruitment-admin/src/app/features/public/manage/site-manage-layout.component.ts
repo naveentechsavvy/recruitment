@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../../core/config/api.config';
 import { portalColors } from '../../../core/models/client-configuration.model';
 import { PublicApp } from '../../../core/models/public-app.model';
 import { PublicAppService } from '../../../core/services/public-app.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { siteSlug } from '../../../core/services/site-hiring.service';
 
 /**
@@ -45,6 +46,9 @@ import { siteSlug } from '../../../core/services/site-hiring.service';
           </a>
           <nav aria-label="Manage">
             <a [routerLink]="['/app', slug, 'manage', 'requirements']" routerLinkActive="active">Requirements</a>
+            @if (canPreonboarding) {
+              <a [routerLink]="['/app', slug, 'manage', 'preonboarding']" routerLinkActive="active">Pre-onboarding</a>
+            }
           </nav>
           <a class="back" [routerLink]="['/app', slug]">← Back to website</a>
         </div>
@@ -55,6 +59,8 @@ import { siteSlug } from '../../../core/services/site-hiring.service';
 })
 export class SiteManageLayoutComponent {
   slug = siteSlug(inject(ActivatedRoute));
+  /** Only Admin, HR BP and Recruiter see the Pre-onboarding link. */
+  canPreonboarding = inject(AuthService).canManagePreonboarding(this.slug);
   app: PublicApp | null = null;
 
   constructor() {

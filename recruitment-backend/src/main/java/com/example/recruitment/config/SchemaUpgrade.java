@@ -41,6 +41,15 @@ public class SchemaUpgrade implements CommandLineRunner {
                     + "and non_unique = 0 and index_name <> 'PRIMARY' "
                     + "group by index_name having count(*) = 1 and max(column_name) = 'email'";
 
+    /**
+     * Same problem for candidates.status: Hibernate may have made it a fixed list of the four old statuses, which
+     * would refuse OFFERED, ACCEPTED and DECLINED. It becomes plain text.
+     */
+    static final String FIND_CANDIDATE_STATUS_TYPE =
+            "select column_type from information_schema.columns "
+                    + "where table_schema = database() and table_name = 'candidates' and column_name = 'status'";
+    static final String WIDEN_CANDIDATE_STATUS = "alter table candidates modify status varchar(20) not null";
+
     private final JdbcTemplate jdbc;
 
     public SchemaUpgrade(JdbcTemplate jdbc) {
@@ -50,6 +59,7 @@ public class SchemaUpgrade implements CommandLineRunner {
     @Override
     public void run(String... args) {
         widenRoleColumn();
+        widenCandidateStatusColumn();
         dropOldUniqueEmailIndex();
     }
 
@@ -80,6 +90,26 @@ public class SchemaUpgrade implements CommandLineRunner {
         } catch (Exception e) {
             log.warn("Could not check or upgrade app_users.role. If creating a Manager or HR BP user fails, run: {}", WIDEN_ROLE_COLUMN, e);
         }
+    }
+
+    private void widenCandidateStatusColumn() {
+        try {
+            List<String> types = jdbc.queryForList(FIND_CANDIDATE_STATUS_TYPE, String.class);
+            if (types != null && !types.isEmpty() && needsStatusUpgrade(types.get(0))) {
+                jdbc.execute(WIDEN_CANDIDATE_STATUS);
+                log.info("Upgraded candidates.status so it accepts the Offered, Accepted and Declined statuses");
+            }
+        } catch (Exception e) {
+            log.warn("Could not check or upgrade candidates.status. If a candidate cannot be saved as Offered, run: {}",
+                    WIDEN_CANDIDATE_STATUS, e);
+        }
+    }
+
+    /** True for an old fixed-list column that does not yet know the offer statuses. */
+    static boolean needsStatusUpgrade(String columnType) {
+        if (columnType == null) return false;
+        String t = columnType.toLowerCase();
+        return t.startsWith("enum(") && !t.contains("'offered'");
     }
 
     /** True for an old fixed-list column that does not yet know the new roles. */

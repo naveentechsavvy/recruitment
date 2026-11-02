@@ -1,4 +1,20 @@
-export type CandidateStatus = 'ACTIVE' | 'ON_HOLD' | 'REJECTED' | 'COMPLETED';
+export type CandidateStatus = 'ACTIVE' | 'ON_HOLD' | 'REJECTED' | 'COMPLETED' | 'OFFERED' | 'ACCEPTED' | 'DECLINED';
+
+/** Where one offer letter stands. It is separate from the candidate's own status. */
+export type OfferStatus = 'RELEASED' | 'ACCEPTED' | 'DECLINED' | 'EXPIRED' | 'WITHDRAWN';
+
+/** The offer as the hiring team sees it. The server decides canResend and canWithdraw. */
+export interface OfferView {
+  id: number;
+  status: OfferStatus;
+  sentAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  declineReason: string | null;
+  sentBy: string | null;
+  canResend: boolean;
+  canWithdraw: boolean;
+}
 export type ScreeningStatus = 'PENDING' | 'PROCEEDED' | 'ON_HOLD' | 'REJECTED';
 export type StageDecision = 'PENDING' | 'APPROVED' | 'REJECTED' | 'HOLD';
 export type ScreeningAction = 'PROCEED' | 'REJECT' | 'ON_HOLD';

@@ -5,9 +5,10 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Observable, switchMap } from 'rxjs';
 import {
-  Candidate, CandidateStage, ScreeningAction, ScreeningInput, StageDecision, TimelineEvent, statusLabel,
+  Candidate, CandidateStage, OfferView, ScreeningAction, ScreeningInput, StageDecision, TimelineEvent, statusLabel,
 } from '../../../core/models/candidate.model';
 import { RESUME_ACCEPT, RESUME_MAX_MB, resumeFileError } from '../../../core/config/upload.config';
+import { PreonboardingCaseView } from '../../../core/models/preonboarding.model';
 import { AuthService, Role } from '../../../core/services/auth.service';
 import { SiteCandidateService } from '../../../core/services/site-candidate.service';
 import { siteSlug } from '../../../core/services/site-hiring.service';
@@ -21,6 +22,8 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
  * The server tells us what the logged-in user may do (canScreen, canRemark, stage.canEdit),
  * and it checks every rule again. The checks here only give the recruiter quick, clear messages.
  */
+const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } as const;
+
 @Component({
   selector: 'app-site-candidate-details',
   imports: [RouterLink, DatePipe, FormsModule, PillComponent],
@@ -134,8 +137,14 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
         } @else {
           <div class="banner warn">{{ holdBanner }}</div>
         }
+      } @else if (candidate.status === 'DECLINED') {
+        <div class="banner bad">The candidate rejected the offer, so the hiring process is closed.</div>
+      } @else if (candidate.status === 'OFFERED') {
+        <div class="banner warn">The offer has been sent. We are waiting for the candidate to accept or reject it.</div>
+      } @else if (candidate.status === 'ACCEPTED') {
+        <div class="banner ok">The candidate accepted the offer.</div>
       } @else if (candidate.screeningStatus === 'PROCEEDED') {
-        <div class="banner ok">Screening is complete. The candidate is ready for Hiring Manager Review.</div>
+        <div class="banner ok">{{ progressBanner }}</div>
       }
 
       <div class="grid">
@@ -185,6 +194,45 @@ type FieldName = 'totalExperience' | 'relevantExperience' | 'currentCtc' | 'expe
               }
             </div>
           </div>
+
+          @if (offer) {
+            <div class="card card-body">
+              <h2 class="card-title">Offer</h2>
+              <dl class="profile">
+                <dt>Status</dt><dd><app-pill [label]="label(offer.status)" /></dd>
+                <dt>Sent</dt><dd>{{ offer.sentAt | date: 'medium' }}</dd>
+                <dt>Sent by</dt><dd>{{ offer.sentBy || '—' }}</dd>
+                @if (offer.status === 'RELEASED') { <dt>Links valid until</dt><dd>{{ offer.expiresAt | date: 'medium' }}</dd> }
+                @if (offer.status === 'EXPIRED') { <dt>Links expired on</dt><dd>{{ offer.expiresAt | date: 'medium' }}</dd> }
+                @if (offer.respondedAt) { <dt>Answered</dt><dd>{{ offer.respondedAt | date: 'medium' }}</dd> }
+                @if (offer.declineReason) { <dt>Reason</dt><dd>{{ offer.declineReason }}</dd> }
+              </dl>
+              @if (offer.canResend || offer.canWithdraw) {
+                <div class="actions">
+                  @if (offer.canResend) {
+                    <button class="btn sm" type="button" [disabled]="busy || offerBusy" (click)="resendOffer()">Resend offer</button>
+                  }
+                  @if (offer.canWithdraw) {
+                    <button class="btn danger sm" type="button" [disabled]="busy || offerBusy" (click)="withdrawOffer()">Withdraw offer</button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
+          @if (preonboarding) {
+            <div class="card card-body">
+              <h2 class="card-title">Pre-onboarding</h2>
+              <dl class="profile">
+                <dt>Status</dt><dd><app-pill [label]="label(preonboarding.status)" /></dd>
+                <dt>Started</dt><dd>{{ preonboarding.createdAt | date: 'medium' }}</dd>
+                <dt>Documents due</dt><dd>{{ preonboarding.dueAt | date: 'mediumDate' }}</dd>
+              </dl>
+              @if (preonboarding.status === 'CREATED') {
+                <span class="hint">The case was created when the candidate accepted. The candidate has not been invited yet.</span>
+              }
+            </div>
+          }
 
           @if (candidate.canScreen && !viewOnly) {
             <div class="card card-body">
@@ -427,6 +475,11 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
   loading = true;
   busy = false;
   fileBusy = false;
+  /** The newest offer sent to this candidate, or null. */
+  offer: OfferView | null = null;
+  offerBusy = false;
+  /** The pre-onboarding case of a candidate who accepted. Only the hiring team (HR BP, recruiter, admin) gets it. */
+  preonboarding: PreonboardingCaseView | null = null;
   error = '';
   notice = '';
   label = statusLabel;
@@ -491,8 +544,14 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
   }
 
   /** Hiring-stage buttons are hidden while the candidate is rejected or on hold. The server refuses them as well. */
+  /** Moving through the stages: Active, or already Offered / Accepted (Background Verification and so on are still open). */
+  get inProgress(): boolean {
+    const status = this.candidate?.status;
+    return status === 'ACTIVE' || status === 'OFFERED' || status === 'ACCEPTED';
+  }
+
   get stagesOpen(): boolean {
-    return !!this.candidate && this.candidate.status !== 'REJECTED' && this.candidate.status !== 'ON_HOLD';
+    return !!this.candidate && this.candidate.status !== 'REJECTED' && this.candidate.status !== 'DECLINED' && this.candidate.status !== 'ON_HOLD';
   }
 
   get canReplace(): boolean {
@@ -615,7 +674,7 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
   /** The step may be changed: not decided yet, and the candidate is not rejected or held at some other step. */
   private stageOpen(s: CandidateStage): boolean {
     const c = this.candidate;
-    if (!c || c.status === 'REJECTED') return false;
+    if (!c || c.status === 'REJECTED' || c.status === 'DECLINED') return false;
     return c.status !== 'ON_HOLD' || s.decision === 'HOLD';
   }
 
@@ -635,7 +694,22 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
 
   /** Hold: only the role responsible for the step may put it on hold, so the same role can always resume it. */
   canHold(s: CandidateStage): boolean {
-    return this.canAct(s) && this.supportsHold(s) && s.current && this.candidate?.status === 'ACTIVE' && this.isResponsible(s);
+    return this.canAct(s) && this.supportsHold(s) && s.current && this.inProgress && this.isResponsible(s);
+  }
+
+  /** The green banner once screening is done: it says where the candidate really is, not always "Hiring Manager Review". */
+  get progressBanner(): string {
+    const c = this.candidate;
+    if (!c) return '';
+    if (c.status === 'COMPLETED') return 'The recruitment process is complete.';
+    // Same fields as the "Current Stage" row in the Profile card, so the banner can never disagree with it.
+    const code = c.currentStageCode ?? this.stages.find((s) => s.current)?.code ?? null;
+    const name = c.currentStageName ?? this.stages.find((s) => s.current)?.name ?? null;
+    if (!code || !name) return 'Screening is complete.';
+    if (code === StagePermissionCodes.HIRING_MANAGER_REVIEW) {
+      return 'Screening is complete. The candidate is ready for Hiring Manager Review.';
+    }
+    return `Screening is complete. The candidate is now at ${name}.`;
   }
 
   /** The banner under the page title while a step is on hold. */
@@ -937,6 +1011,8 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
 
   private show(c: Candidate) {
     this.candidate = c;
+    this.loadOffer(c);
+    this.loadPreonboarding(c);
     this.errs = {};
     this.notes = Object.fromEntries(c.stages.map((s) => [s.code, s.notes ?? '']));
     this.ratings = Object.fromEntries(c.stages.map((s) => [s.code, s.rating ?? null]));
@@ -960,6 +1036,52 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
     const from = list.findIndex((s) => s.code === approved.code);
     const next = list.find((s, i) => i > from && s.current);
     if (next) this.selectedCode = next.code;
+  }
+
+  /** Only a candidate who is at or past the offer can have one, so nobody else triggers the extra call. */
+  private loadOffer(c: Candidate) {
+    const past = ['OFFERED', 'ACCEPTED', 'DECLINED'].includes(c.status)
+      || c.stages.some((s) => s.code === 'offer-released' && s.decision === 'APPROVED');
+    if (!past) { this.offer = null; return; }
+    this.service.getOffer(c.id).subscribe({
+      next: (o) => (this.offer = o ?? null),
+      error: () => (this.offer = null), // the card is only extra information; the page works without it
+    });
+  }
+
+  private loadPreonboarding(c: Candidate) {
+    if (!this.auth.canManagePreonboarding(this.slug) || !['ACCEPTED', 'COMPLETED'].includes(c.status)) {
+      this.preonboarding = null;
+      return;
+    }
+    this.service.getPreonboarding(c.id).subscribe({
+      next: (p) => (this.preonboarding = p ?? null),
+      error: () => (this.preonboarding = null), // the card is only extra information
+    });
+  }
+
+  resendOffer() {
+    this.offerAction(this.service.resendOffer(this.candidate!.id), 'The offer was sent again with fresh links.');
+  }
+
+  withdrawOffer() {
+    if (!window.confirm('Withdraw this offer? Its Accept and Reject links will stop working.')) return;
+    this.offerAction(this.service.withdrawOffer(this.candidate!.id), 'The offer was withdrawn.');
+  }
+
+  /** Runs a resend or withdraw, then reloads the candidate, because its status may have changed too. */
+  private offerAction(call: Observable<OfferView>, success: string) {
+    if (!this.candidate || this.busy || this.offerBusy) return;
+    this.offerBusy = true; this.error = ''; this.notice = '';
+    call.pipe(switchMap(() => this.service.getById(String(this.candidate!.id)))).subscribe({
+      next: (c) => {
+        this.offerBusy = false; this.show(c);
+        this.notice = success;
+        clearTimeout(this.noticeTimer);
+        this.noticeTimer = setTimeout(() => (this.notice = ''), 6000);
+      },
+      error: (err: HttpErrorResponse) => { this.offerBusy = false; this.error = errorText(err); },
+    });
   }
 
   /** Keeps the opened step when the page reloads after a change. Otherwise it opens the current step. */

@@ -17,7 +17,7 @@ class SchemaUpgradeTest {
     @Test
     void anOldFixedListColumnIsWidened() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForList(anyString(), eq(String.class)))
+        when(jdbc.queryForList(eq(SchemaUpgrade.FIND_COLUMN_TYPE), eq(String.class)))
                 .thenReturn(List.of("enum('ADMIN','HIRING_MANAGER','RECRUITER')"));
 
         new SchemaUpgrade(jdbc).run();
@@ -28,7 +28,7 @@ class SchemaUpgradeTest {
     @Test
     void aColumnThatAlreadyKnowsTheNewRolesIsLeftAlone() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForList(anyString(), eq(String.class)))
+        when(jdbc.queryForList(eq(SchemaUpgrade.FIND_COLUMN_TYPE), eq(String.class)))
                 .thenReturn(List.of("enum('ADMIN','HIRING_MANAGER','HR_BP','MANAGER','RECRUITER')"));
 
         new SchemaUpgrade(jdbc).run();
@@ -39,7 +39,7 @@ class SchemaUpgradeTest {
     @Test
     void aPlainTextColumnIsLeftAlone() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(List.of("varchar(20)"));
+        when(jdbc.queryForList(eq(SchemaUpgrade.FIND_COLUMN_TYPE), eq(String.class))).thenReturn(List.of("varchar(20)"));
 
         new SchemaUpgrade(jdbc).run();
 
@@ -49,7 +49,7 @@ class SchemaUpgradeTest {
     @Test
     void aMissingTableDoesNothing() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        when(jdbc.queryForList(anyString(), eq(String.class))).thenReturn(List.of());
+        when(jdbc.queryForList(eq(SchemaUpgrade.FIND_COLUMN_TYPE), eq(String.class))).thenReturn(List.of());
 
         new SchemaUpgrade(jdbc).run();
 
@@ -118,5 +118,25 @@ class SchemaUpgradeTest {
                 .thenThrow(new RuntimeException("no permission"));
 
         assertDoesNotThrow(() -> new SchemaUpgrade(jdbc).run());
+    }
+
+    @Test
+    void anOldFixedListStatusColumnNeedsAnUpgradeButANewOneDoesNot() {
+        assertTrue(SchemaUpgrade.needsStatusUpgrade("enum('ACTIVE','ON_HOLD','REJECTED','COMPLETED')"));
+        assertFalse(SchemaUpgrade.needsStatusUpgrade("enum('ACTIVE','OFFERED','ACCEPTED','DECLINED')"));
+        assertFalse(SchemaUpgrade.needsStatusUpgrade("varchar(20)"));
+        assertFalse(SchemaUpgrade.needsStatusUpgrade(null));
+    }
+
+    @Test
+    void anOldCandidateStatusColumnIsWidened() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        SchemaUpgrade upgrade = new SchemaUpgrade(jdbc);
+        when(jdbc.queryForList(eq(SchemaUpgrade.FIND_CANDIDATE_STATUS_TYPE), eq(String.class)))
+                .thenReturn(List.of("enum('ACTIVE','ON_HOLD','REJECTED','COMPLETED')"));
+
+        upgrade.run();
+
+        verify(jdbc).execute(SchemaUpgrade.WIDEN_CANDIDATE_STATUS);
     }
 }

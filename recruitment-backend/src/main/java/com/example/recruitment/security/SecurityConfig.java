@@ -130,6 +130,18 @@ public class SecurityConfig {
                         .hasAnyRole("ADMIN", "RECRUITER")
                         .requestMatchers(HttpMethod.POST, "/api/site/requirements/*/candidates")
                         .hasAnyRole("ADMIN", "RECRUITER")
+                        // Deleting a candidate: admin or recruiter only (the service checks this again).
+                        .requestMatchers(HttpMethod.DELETE, "/api/site/candidates/*")
+                        .hasAnyRole("ADMIN", "RECRUITER")
+                        // Pre-onboarding (settings and the case of a candidate): admin, HR BP and recruiter only.
+                        .requestMatchers("/api/site/preonboarding/**").hasAnyRole("ADMIN", "HR_BP", "RECRUITER")
+                        .requestMatchers(HttpMethod.GET, "/api/site/candidates/*/preonboarding")
+                        .hasAnyRole("ADMIN", "HR_BP", "RECRUITER")
+                        // An offer can be resent or withdrawn only by an HR BP (the service checks this again).
+                        .requestMatchers(HttpMethod.POST, "/api/site/candidates/*/offer/resend")
+                        .hasAnyRole("ADMIN", "HR_BP")
+                        .requestMatchers(HttpMethod.POST, "/api/site/candidates/*/offer/withdraw")
+                        .hasAnyRole("ADMIN", "HR_BP")
                         // Website editor (footer, name, description, logo): ADMIN, RECRUITER and CLIENT_ADMIN only.
                         // Hiring Manager, Manager and HR BP can read but not change the website.
                         .requestMatchers(HttpMethod.PUT, "/api/site/settings")

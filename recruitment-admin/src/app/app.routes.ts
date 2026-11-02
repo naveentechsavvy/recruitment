@@ -218,6 +218,15 @@ export const routes: Routes = [
             .then((m) => m.SiteRequirementFormComponent),
       },
 
+      // Pre-onboarding settings (Admin, HR BP and Recruiter only)
+      {
+        path: 'preonboarding',
+        canActivate: [clientRoleGuard(['ADMIN', 'HR_BP', 'RECRUITER'])],
+        loadComponent: () =>
+          import('./features/public/manage/site-preonboarding-settings.component')
+            .then((m) => m.SitePreonboardingSettingsComponent),
+      },
+
       // Candidates for a requirement
       {
         path: 'requirements/:id/candidates',
@@ -252,6 +261,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/public/public-app.component')
         .then((m) => m.PublicAppComponent),
+  },
+
+  // The candidate's secure offer page (opened from the offer email, no login)
+  {
+    path: 'offer/:token',
+    loadComponent: () =>
+      import('./features/public/offer-response.component')
+        .then((m) => m.OfferResponseComponent),
   },
 
   { path: '**', redirectTo: 'admin/login' },

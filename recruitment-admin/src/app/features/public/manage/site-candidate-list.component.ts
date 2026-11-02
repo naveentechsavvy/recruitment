@@ -1,10 +1,12 @@
 import { DatePipe } from '@angular/common';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Candidate, statusLabel } from '../../../core/models/candidate.model';
 import { AuthService } from '../../../core/services/auth.service';
 import { SiteCandidateService } from '../../../core/services/site-candidate.service';
 import { siteSlug } from '../../../core/services/site-hiring.service';
+import { errorText } from '../../../core/utils/http-error';
 import { PillComponent } from '../../../shared/components/pill/pill.component';
 
 @Component({
@@ -18,6 +20,8 @@ import { PillComponent } from '../../../shared/components/pill/pill.component';
         @if (canAdd) { <a class="btn primary" [routerLink]="['/app', slug, 'manage', 'requirements', requirementId, 'candidates', 'new']">+ Add Candidate</a> }
       </div>
     </div>
+    @if (notice) { <div class="alert success" role="status">{{ notice }}</div> }
+    @if (error) { <div class="alert error" role="alert">{{ error }}</div> }
     <div class="card">
       @if (loading) { <div class="spinner"></div> }
       @else if (loadError) {
@@ -38,7 +42,14 @@ import { PillComponent } from '../../../shared/components/pill/pill.component';
                 <td>{{ c.currentStageName || '—' }}</td>
                 <td><app-pill [label]="label(c.status)" /></td>
                 <td>{{ c.appliedAt | date: 'medium' }}</td>
-                <td><a class="btn sm" [routerLink]="['/app', slug, 'manage', 'candidates', c.id]">Open</a></td>
+                <td>
+                  <a class="btn sm" [routerLink]="['/app', slug, 'manage', 'candidates', c.id]">Open</a>
+                  @if (canAdd) {
+                    <button class="btn danger sm" type="button" style="margin-left:6px" [disabled]="deletingId === c.id" (click)="remove(c)">
+                      {{ deletingId === c.id ? 'Deleting…' : 'Delete' }}
+                    </button>
+                  }
+                </td>
               </tr>
             }
           </tbody></table></div>
@@ -57,9 +68,29 @@ export class SiteCandidateListComponent {
   candidates: Candidate[] = [];
   loading = true;
   loadError = '';
+  error = '';
+  notice = '';
+  deletingId: number | null = null;
   label = statusLabel;
 
   constructor() { this.load(); }
+
+  /** Admin and Recruiter only (the same people who can add a candidate). The server checks this again. */
+  remove(c: Candidate) {
+    if (this.deletingId !== null) return;
+    const ok = window.confirm(
+      `Delete ${c.fullName} (${c.email}) permanently?\n\nTheir history, stage decisions, offer and resume are removed too. This cannot be undone.`);
+    if (!ok) return;
+    this.deletingId = c.id; this.error = ''; this.notice = '';
+    this.service.delete(c.id).subscribe({
+      next: () => {
+        this.deletingId = null;
+        this.candidates = this.candidates.filter((x) => x.id !== c.id);
+        this.notice = `${c.fullName} was deleted.`;
+      },
+      error: (err: HttpErrorResponse) => { this.deletingId = null; this.error = errorText(err); },
+    });
+  }
 
   load() {
     this.loading = true; this.loadError = '';

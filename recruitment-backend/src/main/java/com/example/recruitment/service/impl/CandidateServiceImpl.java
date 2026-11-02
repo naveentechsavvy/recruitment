@@ -34,8 +34,9 @@ import com.example.recruitment.repository.RequirementRepository;
 import com.example.recruitment.security.AuthUser;
 import com.example.recruitment.security.ClientAccess;
 import com.example.recruitment.service.CandidateService;
-import com.example.recruitment.service.OfferLetterService;
+import com.example.recruitment.service.OfferService;
 import com.example.recruitment.service.PortalGuard;
+import com.example.recruitment.service.PreonboardingService;
 import com.example.recruitment.service.ResumeStorageService;
 import com.example.recruitment.service.StagePermissionService;
 import org.springframework.stereotype.Service;
@@ -72,7 +73,8 @@ public class CandidateServiceImpl implements CandidateService {
     private final ClientProcessRepository clientProcesses;
     private final ResumeStorageService resumeStorage;
     private final StagePermissionService permissions;
-    private final OfferLetterService offerLetters;
+    private final OfferService offers;
+    private final PreonboardingService preonboarding;
     private final ClientRoleAssignmentRepository roleAssignments;
 
     public CandidateServiceImpl(CandidateRepository candidates,
@@ -83,8 +85,9 @@ public class CandidateServiceImpl implements CandidateService {
                                 ClientProcessRepository clientProcesses,
                                 ResumeStorageService resumeStorage,
                                 StagePermissionService permissions,
-                                OfferLetterService offerLetters,
-                                ClientRoleAssignmentRepository roleAssignments) {
+                                OfferService offers,
+                                ClientRoleAssignmentRepository roleAssignments,
+                                PreonboardingService preonboarding) {
         this.candidates = candidates;
         this.records = records;
         this.events = events;
@@ -93,8 +96,9 @@ public class CandidateServiceImpl implements CandidateService {
         this.clientProcesses = clientProcesses;
         this.resumeStorage = resumeStorage;
         this.permissions = permissions;
-        this.offerLetters = offerLetters;
+        this.offers = offers;
         this.roleAssignments = roleAssignments;
+        this.preonboarding = preonboarding;
     }
 
     // ---------------------------------------------------------------- creating candidates
@@ -226,11 +230,8 @@ public class CandidateServiceImpl implements CandidateService {
         Requirement requirement = findRequirement(requirementId);
         ClientAccess.require(user, requirement.getClient().getId());
 
-        if (user != null && user.role() == Role.HIRING_MANAGER
-                && !permissions.isOwner(user, requirement)) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "This job is not assigned to you");
-        }
+        // A Hiring Manager may see every job's candidates of his own client (ClientAccess above keeps him inside it).
+        // He can only EDIT his own jobs' Hiring Manager Review, which StagePermissionService checks.
 
         return candidates.findByRequirementIdOrderByCreatedAtDesc(requirementId).stream()
                 .map(c -> toResponse(c, user, false))
@@ -303,6 +304,41 @@ public class CandidateServiceImpl implements CandidateService {
         } catch (RuntimeException e) {
             resumeStorage.delete(stored.filename());
             throw e;
+        }
+    }
+
+    // ---------------------------------------------------------------- deleting
+
+    /**
+     * Deletes a candidate for good: the offers, the history, the stage decisions and the candidate row.
+     * The resume file is removed only after the database change is committed, so a failed delete never loses it.
+     * Only an admin or recruiter may do this, and never on a frozen portal.
+     */
+    @Override
+    public void deleteCandidate(Long id, AuthUser user) {
+        permissions.requireRecruiterOrAdmin(user);
+        Candidate candidate = findAllowed(id, user);
+        PortalGuard.requireActive(candidate.getClient());
+
+        String resumeFile = candidate.getResumeFile();
+
+        offers.deleteForCandidate(candidate.getId());
+        preonboarding.deleteForCandidate(candidate.getId());
+        events.deleteByCandidateId(candidate.getId());
+        records.deleteByCandidateId(candidate.getId());
+        candidates.delete(candidate);
+
+        if (resumeFile != null && !resumeFile.isBlank()) {
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        resumeStorage.delete(resumeFile);
+                    }
+                });
+            } else {
+                resumeStorage.delete(resumeFile);
+            }
         }
     }
 
@@ -494,6 +530,11 @@ public class CandidateServiceImpl implements CandidateService {
                     "This candidate has been rejected, so the stages can no longer be changed");
         }
 
+        if (candidate.getStatus() == CandidateStatus.DECLINED) {
+            throw new IllegalArgumentException(
+                    "The candidate declined the offer, so the stages can no longer be changed");
+        }
+
         List<ClientProcess> stages = enabledStages(candidate.getClient().getId());
         int index = indexOf(stages, stageCode);
 
@@ -625,13 +666,14 @@ public class CandidateServiceImpl implements CandidateService {
             if (!approved) {
                 candidate.setStatus(CandidateStatus.REJECTED);
             } else {
-                candidate.setStatus(CandidateStatus.ACTIVE);
+                candidate.setStatus(keepProgress(candidate.getStatus()));
                 advance(candidate, stages, index, user.email());
 
                 // Approving Offer Released issues the offer: the letter is emailed to the candidate.
                 // If the email fails the whole approval is undone, so the HR BP can simply try again.
                 if (StagePermissionService.OFFER_RELEASE_STAGE.equals(stageCode)) {
                     sendOfferLetter(candidate, user.email());
+                    candidate.setStatus(CandidateStatus.OFFERED);
                 }
             }
         }
@@ -655,7 +697,7 @@ public class CandidateServiceImpl implements CandidateService {
                     .forEach(cc::add);
         }
 
-        List<String> sentCc = offerLetters.sendOffer(candidate, cc);
+        List<String> sentCc = offers.issue(candidate, cc, actor);
 
         log(candidate, EventType.STAGE_DECISION, "Offer letter emailed",
                 "To: " + candidate.getEmail() + (sentCc.isEmpty() ? "" : "\nCC: " + String.join(", ", sentCc)), actor);
@@ -665,6 +707,11 @@ public class CandidateServiceImpl implements CandidateService {
      * Moves the candidate to the next configured stage.
      * Nothing can be skipped, and nothing reaches the hiring manager unscreened.
      */
+    /** Offered and Accepted stay as they are while stages are approved. Anything else (for example On Hold) becomes Active. */
+    private static CandidateStatus keepProgress(CandidateStatus status) {
+        return status != null && status.inProgress() ? status : CandidateStatus.ACTIVE;
+    }
+
     private void advance(Candidate c, List<ClientProcess> stages, int index, String actor) {
         if (index + 1 < stages.size()) {
             RecruitmentProcess next = stages.get(index + 1).getProcess();
@@ -676,10 +723,13 @@ public class CandidateServiceImpl implements CandidateService {
             }
 
             c.setCurrentProcess(next);
-            c.setStatus(CandidateStatus.ACTIVE);
+            c.setStatus(keepProgress(c.getStatus()));
 
             log(c, EventType.STAGE_MOVED,
                     "Moved to " + next.getName(), null, actor);
+        } else if (StagePermissionService.OFFER_RELEASE_STAGE.equals(stages.get(index).getProcess().getCode())) {
+            // The offer is out but not answered yet, so the process is not completed. The caller sets the status to OFFERED.
+            c.setStatus(CandidateStatus.ACTIVE);
         } else {
             c.setStatus(CandidateStatus.COMPLETED);
 

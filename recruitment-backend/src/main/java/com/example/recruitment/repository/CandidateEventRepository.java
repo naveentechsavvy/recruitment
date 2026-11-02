@@ -9,4 +9,7 @@ public interface CandidateEventRepository extends JpaRepository<CandidateEvent, 
 
     /** Oldest first, so the timeline reads in the order things happened. */
     List<CandidateEvent> findByCandidateIdOrderByCreatedAtAscIdAsc(Long candidateId);
+
+    /** Used only when a candidate is deleted. */
+    void deleteByCandidateId(Long candidateId);
 }

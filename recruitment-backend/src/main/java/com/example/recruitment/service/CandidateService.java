@@ -37,4 +37,7 @@ public interface CandidateService {
     ResumeStorageService.Loaded getResume(Long id, AuthUser user);
 
     CandidateResponse replaceResume(Long id, MultipartFile resume, AuthUser user);
+
+    /** Permanently removes a candidate with the history, stage decisions, offers and resume file. Admin or recruiter only. */
+    void deleteCandidate(Long id, AuthUser user);
 }

@@ -118,6 +118,12 @@ export class AuthService {
     return role === 'ADMIN' || role === 'RECRUITER';
   }
 
+  /** Pre-onboarding settings and cases: Admin, HR BP and Recruiter only. Hiring Manager and Manager have no access. */
+  canManagePreonboarding(portal: string): boolean {
+    const role = this.clientRole(portal);
+    return role === 'ADMIN' || role === 'HR_BP' || role === 'RECRUITER';
+  }
+
   /** Manager is view-only on a client website. */
   isViewOnly(portal: string): boolean {
     return this.clientRole(portal) === 'MANAGER';

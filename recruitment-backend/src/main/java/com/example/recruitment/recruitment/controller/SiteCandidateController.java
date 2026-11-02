@@ -1,6 +1,8 @@
 package com.example.recruitment.controller;
 
 import com.example.recruitment.dto.CandidateResponse;
+import com.example.recruitment.dto.OfferView;
+import com.example.recruitment.dto.PreonboardingCaseView;
 import com.example.recruitment.dto.RemarkRequest;
 import com.example.recruitment.dto.ScreeningActionRequest;
 import com.example.recruitment.dto.ScreeningUpdateRequest;
@@ -80,6 +82,37 @@ public class SiteCandidateController {
                                          @Valid @RequestBody StageUpdateRequest request,
                                          @AuthenticationPrincipal AuthUser user) {
         return service.updateStage(user, id, stageCode, request);
+    }
+
+    /** Admin or recruiter only. Removes the candidate and everything that belongs to the candidate. */
+    @DeleteMapping("/candidates/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        service.deleteCandidate(user, id);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** The newest offer of this candidate (204 when none was sent). */
+    @GetMapping("/candidates/{id}/offer")
+    public ResponseEntity<OfferView> offer(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        OfferView view = service.offer(user, id);
+        return view == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(view);
+    }
+
+    /** The candidate's pre-onboarding case (204 when none). Admin, HR BP and recruiter only. */
+    @GetMapping("/candidates/{id}/preonboarding")
+    public ResponseEntity<PreonboardingCaseView> preonboarding(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        PreonboardingCaseView view = service.preonboarding(user, id);
+        return view == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(view);
+    }
+
+    @PostMapping("/candidates/{id}/offer/resend")
+    public OfferView resendOffer(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        return service.resendOffer(user, id);
+    }
+
+    @PostMapping("/candidates/{id}/offer/withdraw")
+    public OfferView withdrawOffer(@PathVariable Long id, @AuthenticationPrincipal AuthUser user) {
+        return service.withdrawOffer(user, id);
     }
 
     @GetMapping("/candidates/{id}/resume")

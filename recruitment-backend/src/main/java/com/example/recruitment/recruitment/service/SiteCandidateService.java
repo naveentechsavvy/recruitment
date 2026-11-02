@@ -1,6 +1,8 @@
 package com.example.recruitment.service;
 
 import com.example.recruitment.dto.CandidateResponse;
+import com.example.recruitment.dto.OfferView;
+import com.example.recruitment.dto.PreonboardingCaseView;
 import com.example.recruitment.dto.RemarkRequest;
 import com.example.recruitment.dto.RequirementResponse;
 import com.example.recruitment.dto.ScreeningActionRequest;
@@ -35,12 +37,17 @@ public class SiteCandidateService {
     private final CandidateService candidates;
     private final RequirementService requirements;
     private final CandidateRepository candidateRepository;
+    private final OfferService offers;
+    private final PreonboardingService preonboarding;
 
     public SiteCandidateService(CandidateService candidates, RequirementService requirements,
-                                CandidateRepository candidateRepository) {
+                                CandidateRepository candidateRepository, OfferService offers,
+                                PreonboardingService preonboarding) {
         this.candidates = candidates;
         this.requirements = requirements;
         this.candidateRepository = candidateRepository;
+        this.offers = offers;
+        this.preonboarding = preonboarding;
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +97,37 @@ public class SiteCandidateService {
     public CandidateResponse replaceResume(AuthUser user, Long id, MultipartFile resume) {
         requireOwnCandidate(user, id);
         return candidates.replaceResume(id, resume, user);
+    }
+
+    public void deleteCandidate(AuthUser user, Long id) {
+        requireOwnCandidate(user, id);
+        candidates.deleteCandidate(id, user);
+    }
+
+    /** Who may see the candidate may see the offer. Null when no offer was sent. */
+    @Transactional(readOnly = true)
+    public OfferView offer(AuthUser user, Long id) {
+        requireOwnCandidate(user, id);
+        candidates.getCandidate(id, user); // the same visibility rules as the candidate page
+        return offers.latest(id, user);
+    }
+
+    /** The pre-onboarding case of a candidate (HR BP, recruiter, admin). Null when there is none. */
+    @Transactional(readOnly = true)
+    public PreonboardingCaseView preonboarding(AuthUser user, Long id) {
+        requireOwnCandidate(user, id);
+        candidates.getCandidate(id, user); // the same visibility rules as the candidate page
+        return preonboarding.caseFor(id, user);
+    }
+
+    public OfferView resendOffer(AuthUser user, Long id) {
+        requireOwnCandidate(user, id);
+        return offers.resend(id, user);
+    }
+
+    public OfferView withdrawOffer(AuthUser user, Long id) {
+        requireOwnCandidate(user, id);
+        return offers.withdraw(id, user);
     }
 
     // ------------------------------------------------------------------ helpers
