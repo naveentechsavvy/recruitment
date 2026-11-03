@@ -1,4 +1,3 @@
-
 @if (loading) {
   <div class="spinner"></div>
 }
@@ -113,26 +112,28 @@
         Hiring managers and the requirements they create for this client.
       </p>
 
-      <a
-        class="btn primary"
-        [routerLink]="['/admin/clients', client.id, 'hiring']"
-      >
-        Open Hiring Dashboard
-      </a>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px;">
+        <a
+          class="btn primary"
+          [routerLink]="['/admin/clients', client.id, 'hiring']"
+        >
+          Open Hiring Dashboard
+        </a>
 
-      <a
-        class="btn"
-        [routerLink]="['/admin/clients', client.id, 'hiring-managers']"
-      >
-        Hiring Managers
-      </a>
+        <a
+          class="btn"
+          [routerLink]="['/admin/clients', client.id, 'hiring-managers']"
+        >
+          Hiring Managers
+        </a>
 
-      <a
-        class="btn"
-        [routerLink]="['/admin/clients', client.id, 'requirements']"
-      >
-        Requirements
-      </a>
+        <a
+          class="btn"
+          [routerLink]="['/admin/clients', client.id, 'requirements']"
+        >
+          Requirements
+        </a>
+      </div>
     </div>
   </div>
 }

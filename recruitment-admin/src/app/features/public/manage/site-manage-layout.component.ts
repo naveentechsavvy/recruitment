@@ -48,6 +48,7 @@ import { siteSlug } from '../../../core/services/site-hiring.service';
             <a [routerLink]="['/app', slug, 'manage', 'requirements']" routerLinkActive="active">Requirements</a>
             @if (canPreonboarding) {
               <a [routerLink]="['/app', slug, 'manage', 'preonboarding']" routerLinkActive="active">Pre-onboarding</a>
+              <a [routerLink]="['/app', slug, 'manage', 'onboarding']" routerLinkActive="active">Onboarding</a>
             }
           </nav>
           <a class="back" [routerLink]="['/app', slug]">← Back to website</a>

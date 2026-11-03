@@ -10,7 +10,7 @@ import {
 import { RESUME_ACCEPT, RESUME_MAX_MB, resumeFileError } from '../../../core/config/upload.config';
 import { PreonboardingCaseView } from '../../../core/models/preonboarding.model';
 import { AuthService, Role } from '../../../core/services/auth.service';
-import { SiteCandidateService } from '../../../core/services/site-candidate.service';
+import { SiteCandidateService, PreonboardingDocumentView } from '../../../core/services/site-candidate.service';
 import { siteSlug } from '../../../core/services/site-hiring.service';
 import { errorText } from '../../../core/utils/http-error';
 import { PillComponent } from '../../../shared/components/pill/pill.component';
@@ -76,6 +76,19 @@ const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } 
     .dialog { background: #fff; border-radius: 12px; padding: 24px; width: 100%; max-width: 460px; box-shadow: 0 20px 40px rgba(0, 0, 0, .25); }
     .dialog h3 { margin: 0 0 6px; font-size: 18px; }
     .dialog p { margin: 0 0 12px; color: #667085; }
+
+    /* ---- pre-onboarding ---- */
+    .pre-title { margin: 22px 0 6px; font-size: 15px; font-weight: 700; }
+    .pre-details { margin: 0; }
+    .pre-details dd { white-space: pre-wrap; }
+    .pre-docs { display: flex; flex-direction: column; gap: 10px; }
+    .pre-doc { border: 1px solid #e5e7eb; border-radius: 10px; padding: 12px 14px; background: #fff; }
+    .pre-doc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .pre-doc-name { font-weight: 600; font-size: 14px; }
+    .pre-doc-file { color: #6b7280; font-size: 13px; word-break: break-all; margin-top: 2px; }
+    .pre-doc .meta { margin-top: 6px; }
+    .pre-doc .actions { margin-top: 10px; }
+    .pre-note { margin-top: 14px; display: block; }
 
     /* ---- horizontal workflow ---- */
     .workflow { margin: 0; }
@@ -220,20 +233,6 @@ const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } 
             </div>
           }
 
-          @if (preonboarding) {
-            <div class="card card-body">
-              <h2 class="card-title">Pre-onboarding</h2>
-              <dl class="profile">
-                <dt>Status</dt><dd><app-pill [label]="label(preonboarding.status)" /></dd>
-                <dt>Started</dt><dd>{{ preonboarding.createdAt | date: 'medium' }}</dd>
-                <dt>Documents due</dt><dd>{{ preonboarding.dueAt | date: 'mediumDate' }}</dd>
-              </dl>
-              @if (preonboarding.status === 'CREATED') {
-                <span class="hint">The case was created when the candidate accepted. The candidate has not been invited yet.</span>
-              }
-            </div>
-          }
-
           @if (candidate.canScreen && !viewOnly) {
             <div class="card card-body">
               <h2 class="card-title">Screening</h2>
@@ -277,13 +276,18 @@ const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } 
 
         <!-- RIGHT COLUMN: Workflow, Remarks (everyone) and History (admin only) -->
         <div class="col">
-          @if (canSeeHistory) {
+          @if (canSeeHistory || preonboarding) {
             <div class="tabs" role="tablist">
-              <button type="button" class="tab" role="tab" [class.on]="tab === 'workflow'" [attr.aria-selected]="tab === 'workflow'" (click)="tab = 'workflow'">Workflow</button>
-              <button type="button" class="tab" role="tab" [class.on]="tab === 'history'" [attr.aria-selected]="tab === 'history'" (click)="tab = 'history'">History</button>
+              <button type="button" class="tab" role="tab" [class.on]="activeTab === 'workflow'" [attr.aria-selected]="activeTab === 'workflow'" (click)="tab = 'workflow'">Workflow</button>
+              @if (preonboarding) {
+                <button type="button" class="tab" role="tab" [class.on]="activeTab === 'preonboarding'" [attr.aria-selected]="activeTab === 'preonboarding'" (click)="tab = 'preonboarding'">Pre-onboarding</button>
+              }
+              @if (canSeeHistory) {
+                <button type="button" class="tab" role="tab" [class.on]="activeTab === 'history'" [attr.aria-selected]="activeTab === 'history'" (click)="tab = 'history'">History</button>
+              }
             </div>
           }
-          @if (tab === 'workflow' || !canSeeHistory) {
+          @if (activeTab === 'workflow') {
           @if (stages.length) {
             <div class="card card-body workflow">
               <h2 class="card-title">Workflow</h2>
@@ -385,7 +389,7 @@ const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } 
 
           }
 
-          @if (canSeeHistory && tab === 'history') {
+          @if (activeTab === 'history') {
           <div class="card card-body">
             <h2 class="card-title">History</h2>
             <p class="card-sub">Who did what, and when. Only admins can see this.</p>
@@ -400,6 +404,84 @@ const StagePermissionCodes = { HIRING_MANAGER_REVIEW: 'hiring-manager-review' } 
             </div>
           </div>
           }
+
+          @if (activeTab === 'preonboarding' && preonboarding) {
+            <div class="card card-body">
+              <h2 class="card-title">Pre-onboarding</h2>
+
+              <dl class="profile">
+                <dt>Status</dt>
+                <dd><app-pill [label]="label(preonboarding.status)" /></dd>
+                <dt>Started</dt>
+                <dd>{{ preonboarding.createdAt | date: 'medium' }}</dd>
+                <dt>Documents due</dt>
+                <dd>{{ preonboarding.dueAt | date: 'mediumDate' }}</dd>
+              </dl>
+
+              @if (preonboarding.status === 'CREATED' || preonboarding.status === 'INVITED') {
+                <span class="hint">A secure invitation is sent automatically after offer acceptance. You can send a fresh link if needed.</span>
+                <div class="actions">
+                  <button class="btn primary sm" type="button" [disabled]="preonboardingBusy" (click)="invitePreonboarding()">
+                    {{ preonboardingBusy ? 'Sending…' : 'Resend invitation' }}
+                  </button>
+                </div>
+              }
+
+              @if (preonboarding.status === 'INVITED') {
+                <div class="hint">Invitation sent. Candidate must verify their email and submit the requested information.</div>
+              }
+
+              @if (submissionEntries.length) {
+                <h3 class="pre-title">Submitted personal details</h3>
+                <dl class="profile pre-details">
+                  @for (row of submissionEntries; track row.label) {
+                    <dt>{{ row.label }}</dt>
+                    <dd>{{ row.value }}</dd>
+                  }
+                </dl>
+              }
+
+              @if (preonboardingDocs.length) {
+                <h3 class="pre-title">Submitted documents</h3>
+                <div class="pre-docs">
+                  @for (doc of preonboardingDocs; track doc.id) {
+                    <div class="pre-doc">
+                      <div class="pre-doc-head">
+                        <div>
+                          <div class="pre-doc-name">{{ prettyKey(doc.itemCode) }}</div>
+                          <div class="pre-doc-file">{{ doc.originalName }}</div>
+                        </div>
+                        <app-pill [label]="docStatusText(doc.reviewStatus)" />
+                      </div>
+                      <div class="meta">Uploaded {{ doc.uploadedAt | date: 'medium' }}</div>
+                      @if (doc.reviewComment) { <p class="notes">{{ doc.reviewComment }}</p> }
+                      <div class="actions">
+                        <button class="btn sm" type="button" [disabled]="preonboardingBusy" (click)="downloadPreonboardingDoc(doc)">Download</button>
+                        @if (doc.reviewStatus === 'PENDING') {
+                          <button class="btn primary sm" type="button" [disabled]="preonboardingBusy" (click)="reviewPreonboardingDoc(doc, 'APPROVED')">Approve</button>
+                          <button class="btn danger sm" type="button" [disabled]="preonboardingBusy" (click)="reviewPreonboardingDoc(doc, 'NEEDS_CORRECTION')">Needs correction</button>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+
+              @if (preonboarding.status === 'SUBMITTED') {
+                <textarea class="input" [(ngModel)]="preonboardingComment" name="preonboardingComment"
+                          placeholder="HR comment / correction instructions"></textarea>
+                <div class="actions">
+                  <button class="btn sm" type="button" [disabled]="preonboardingBusy || !preonboardingComment.trim()" (click)="requestPreonboardingCorrection()">Request correction</button>
+                  <button class="btn primary sm" type="button" [disabled]="preonboardingBusy" (click)="approvePreonboarding()">Final approve</button>
+                </div>
+              }
+
+              @if (preonboarding.status === 'CORRECTION_REQUIRED') {
+                <span class="hint">Waiting for the candidate to correct and resubmit the requested information.</span>
+              }
+            </div>
+          }
+
         </div>
       </div>
 
@@ -480,14 +562,25 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
   offerBusy = false;
   /** The pre-onboarding case of a candidate who accepted. Only the hiring team (HR BP, recruiter, admin) gets it. */
   preonboarding: PreonboardingCaseView | null = null;
+  preonboardingDocs: PreonboardingDocumentView[] = [];
+  preonboardingSubmission: { candidateName: string; details: string | null } | null = null;
+  preonboardingBusy = false;
+  preonboardingComment = '';
   error = '';
   notice = '';
   label = statusLabel;
   accept = RESUME_ACCEPT;
   maxMb = RESUME_MAX_MB;
 
-  /** Which tab of the right column is open. The History tab exists for admins only. */
-  tab: 'workflow' | 'history' = 'workflow';
+  /** Which tab of the right column is open. History is for admins only; Pre-onboarding exists once the candidate has a pre-onboarding case. */
+  tab: 'workflow' | 'history' | 'preonboarding' = 'workflow';
+
+  /** The tab that is really shown: a tab the person may not see (or that has no data) falls back to Workflow. */
+  get activeTab(): 'workflow' | 'history' | 'preonboarding' {
+    if (this.tab === 'history' && !this.canSeeHistory) return 'workflow';
+    if (this.tab === 'preonboarding' && !this.preonboarding) return 'workflow';
+    return this.tab;
+  }
 
   /** Only an admin (the client's own Admin or the platform Admin) may see the history of who did what. The server filters it too. */
   get canSeeHistory(): boolean {
@@ -1049,16 +1142,148 @@ export class SiteCandidateDetailsComponent implements OnDestroy, AfterViewChecke
     });
   }
 
+  // ---------------------------------------------------------------- pre-onboarding
+
   private loadPreonboarding(c: Candidate) {
     if (!this.auth.canManagePreonboarding(this.slug) || !['ACCEPTED', 'COMPLETED'].includes(c.status)) {
       this.preonboarding = null;
       return;
     }
     this.service.getPreonboarding(c.id).subscribe({
-      next: (p) => (this.preonboarding = p ?? null),
+      next: (p) => {
+        this.preonboarding = p ?? null;
+        if (!p) return;
+
+        this.service.getPreonboardingDocuments(c.id).subscribe({
+          next: (docs) => (this.preonboardingDocs = docs),
+          error: () => (this.preonboardingDocs = []),
+        });
+        this.service.getPreonboardingSubmission(c.id).subscribe({
+          next: (submission) => (this.preonboardingSubmission = submission),
+          error: () => (this.preonboardingSubmission = null),
+        });
+      },
       error: () => (this.preonboarding = null), // the card is only extra information
     });
   }
+
+  /** The submitted details arrive as a JSON string. Show them as label / value rows instead of raw JSON. */
+  get submissionEntries(): { label: string; value: string }[] {
+    const raw = this.preonboardingSubmission?.details;
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return Object.entries(parsed).map(([key, value]) => ({
+          label: this.prettyKey(key),
+          value: String(value ?? '').trim() || '—',
+        }));
+      }
+    } catch {
+      // not JSON: show the text as it is
+    }
+    return [{ label: 'Details', value: raw }];
+  }
+
+  /** DATE_OF_BIRTH becomes "Date of birth". */
+  prettyKey(key: string): string {
+    const text = (key ?? '').replace(/_/g, ' ').trim().toLowerCase();
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  docStatusText(status: string): string {
+    switch (status) {
+      case 'PENDING': return 'Pending';
+      case 'APPROVED': return 'Approved';
+      case 'NEEDS_CORRECTION': return 'Needs correction';
+      default: return this.prettyKey(status);
+    }
+  }
+
+  invitePreonboarding() {
+    if (!this.candidate) return;
+    this.preonboardingBusy = true;
+    this.error = '';
+    this.service.invitePreonboarding(this.candidate.id).subscribe({
+      next: (r) => {
+        this.notice = r.message;
+        this.preonboardingBusy = false;
+        this.service.getById(String(this.candidate!.id)).subscribe((c) => this.show(c));
+      },
+      error: (e) => {
+        this.error = errorText(e);
+        this.preonboardingBusy = false;
+      },
+    });
+  }
+
+  reviewPreonboardingDoc(doc: PreonboardingDocumentView, action: string) {
+    if (!this.candidate) return;
+    let comment = '';
+    if (action === 'NEEDS_CORRECTION') {
+      comment = window.prompt('What should the candidate correct?') || '';
+      if (!comment.trim()) return;
+    }
+    this.preonboardingBusy = true;
+    this.service.reviewPreonboardingDocument(this.candidate.id, doc.id, action, comment).subscribe({
+      next: (d) => {
+        this.preonboardingDocs = this.preonboardingDocs.map((x) => (x.id === d.id ? d : x));
+        this.preonboardingBusy = false;
+      },
+      error: (e) => {
+        this.error = errorText(e);
+        this.preonboardingBusy = false;
+      },
+    });
+  }
+
+  requestPreonboardingCorrection() {
+    if (!this.candidate || !this.preonboardingComment.trim()) return;
+    this.preonboardingBusy = true;
+    this.service.requestPreonboardingCorrection(this.candidate.id, this.preonboardingComment).subscribe({
+      next: () => {
+        this.notice = 'Correction request sent to candidate.';
+        this.preonboardingBusy = false;
+      },
+      error: (e) => {
+        this.error = errorText(e);
+        this.preonboardingBusy = false;
+      },
+    });
+  }
+
+  approvePreonboarding() {
+    if (!this.candidate) return;
+    this.preonboardingBusy = true;
+    this.service.approvePreonboarding(this.candidate.id, this.preonboardingComment).subscribe({
+      next: () => {
+        this.notice = 'Pre-onboarding approved.';
+        this.preonboardingBusy = false;
+        this.service.getById(String(this.candidate!.id)).subscribe((c) => this.show(c));
+      },
+      error: (e) => {
+        this.error = errorText(e);
+        this.preonboardingBusy = false;
+      },
+    });
+  }
+
+  downloadPreonboardingDoc(doc: PreonboardingDocumentView) {
+    if (!this.candidate) return;
+    this.service.downloadPreonboardingDocument(this.candidate.id, doc.id).subscribe({
+      next: (b) => {
+        const u = URL.createObjectURL(b);
+        const a = document.createElement('a');
+        a.href = u;
+        a.download = doc.originalName;
+        a.click();
+        URL.revokeObjectURL(u);
+      },
+      error: (e) => (this.error = errorText(e)),
+    });
+  }
+
+  // ---------------------------------------------------------------- offer actions
 
   resendOffer() {
     this.offerAction(this.service.resendOffer(this.candidate!.id), 'The offer was sent again with fresh links.');

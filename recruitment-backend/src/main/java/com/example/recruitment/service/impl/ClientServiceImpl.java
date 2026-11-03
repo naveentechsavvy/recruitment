@@ -19,6 +19,7 @@ import com.example.recruitment.service.ResumeStorageService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -48,6 +49,8 @@ public class ClientServiceImpl implements ClientService {
 
     @PersistenceContext
     private EntityManager em;
+    @Autowired(required = false)
+    private com.example.recruitment.service.PreonboardingWorkflowService preonboardingWorkflow;
 
     public ClientServiceImpl(ClientRepository clientRepository,
                              ClientProcessRepository clientProcessRepository,
@@ -111,11 +114,14 @@ public class ClientServiceImpl implements ClientService {
     public void deleteClient(Long id) {
         Client client = findClient(id);
         String logoUrl = client.getLogoUrl();
+        if (preonboardingWorkflow != null) preonboardingWorkflow.deleteFilesForClient(id);
 
         // Candidates first (children before parents), and remember their resume files to delete after commit.
         List<String> resumeFiles = em.createQuery(
                 "select c.resumeFile from Candidate c where c.client.id = :id and c.resumeFile is not null", String.class)
                 .setParameter("id", id).getResultList();
+        em.createQuery("delete from PreonboardingDocument d where d.preonboardingCase.client.id = :id").setParameter("id", id).executeUpdate();
+        em.createQuery("delete from PreonboardingAccess a where a.preonboardingCase.client.id = :id").setParameter("id", id).executeUpdate();
         em.createQuery("delete from PreonboardingCase p where p.client.id = :id").setParameter("id", id).executeUpdate();
         em.createQuery("delete from PreonboardingSetting s where s.client.id = :id").setParameter("id", id).executeUpdate();
         em.createQuery("delete from PreonboardingConfig c where c.client.id = :id").setParameter("id", id).executeUpdate();

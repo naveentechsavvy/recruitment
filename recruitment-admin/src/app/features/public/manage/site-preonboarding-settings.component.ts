@@ -21,7 +21,19 @@ import { errorText } from '../../../core/utils/http-error';
     .check { display: flex; justify-content: center; }
     .check input { width: 18px; height: 18px; cursor: pointer; }
     th.c, td.c { text-align: center; width: 140px; }
-    .actions { margin-top: 20px; display: flex; gap: 8px; }
+    .actions { margin-top: 20px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toast {
+      position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 2000;
+      display: flex; align-items: center; gap: 10px; padding: 12px 22px; border-radius: 999px;
+      background: #166534; color: #fff; font-weight: 600; font-size: 14px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+      animation: toast-in .25s ease-out;
+    }
+    @keyframes toast-in {
+      from { opacity: 0; transform: translate(-50%, -12px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+    .save-error { color: #991b1b; font-weight: 600; font-size: 14px; }
   `,
   template: `
     <div class="page-head">
@@ -29,8 +41,9 @@ import { errorText } from '../../../core/utils/http-error';
         <p>What a new joiner is asked for after they accept the offer. The documents they upload are checked by HR.</p></div>
     </div>
 
-    @if (notice) { <div class="alert success" role="status">{{ notice }}</div> }
-    @if (error) { <div class="alert error" role="alert">{{ error }}</div> }
+    @if (notice) { <div class="toast" role="status">✓ {{ notice }}</div> }
+
+    @if (error && !loaded) { <div class="alert error" role="alert">{{ error }}</div> }
 
     <div class="card card-body">
       @if (loading) { <div class="spinner"></div> }
@@ -63,6 +76,7 @@ import { errorText } from '../../../core/utils/http-error';
 
         <div class="actions">
           <button class="btn primary" type="button" [disabled]="busy" (click)="save()">{{ busy ? 'Saving…' : 'Save settings' }}</button>
+          @if (error) { <span class="save-error" role="alert">{{ error }}</span> }
         </div>
       }
     </div>

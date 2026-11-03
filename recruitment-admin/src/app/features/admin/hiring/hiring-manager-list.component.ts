@@ -8,10 +8,13 @@ import { PillComponent } from '../../../shared/components/pill/pill.component';
 @Component({
   selector: 'app-hiring-manager-list',
   imports: [RouterLink, DatePipe, PillComponent],
+  styles: `
+    .head-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  `,
   template: `
     <div class="page-head">
       <div><h1>Hiring Managers</h1><p>People at this client who create and review requirements.</p></div>
-      <div>
+      <div class="head-actions">
         <a class="btn" [routerLink]="['/admin/clients', clientId, 'hiring']">← Dashboard</a>
         <a class="btn primary" [routerLink]="['/admin/clients', clientId, 'hiring-managers', 'create']">+ Create Hiring Manager</a>
       </div>

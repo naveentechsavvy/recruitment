@@ -11,6 +11,19 @@ import { PreonboardingCaseView } from '../models/preonboarding.model';
  * CandidateService, so the website screens can be the same screens. Every call carries that website's own login
  * (CLIENT_SLUG), never the Admin Portal's, and the backend takes the client from that login.
  */
+export interface PreonboardingDocumentView { id:number; itemCode:string; originalName:string; contentType:string; fileSize:number; reviewStatus:string; reviewComment?:string; uploadedAt:string; reviewedAt?:string; reviewedBy?:string; }
+
+export interface OnboardingCandidateView {
+  candidateId: number;
+  fullName: string;
+  email: string;
+  phone: string | null;
+  requirementId: number;
+  candidateStatus: string;
+  onboardingStatus: string;
+  caseCreatedAt: string;
+}
+
 export class SiteCandidateApi {
   private url = `${API_BASE_URL}/api/site`;
   private context: HttpContext;
@@ -63,6 +76,18 @@ export class SiteCandidateApi {
   getPreonboarding(id: number): Observable<PreonboardingCaseView | null> {
     return this.http.get<PreonboardingCaseView | null>(`${this.url}/candidates/${id}/preonboarding`, { context: this.context });
   }
+
+  getOnboardingCandidates(): Observable<OnboardingCandidateView[]> {
+    return this.http.get<OnboardingCandidateView[]>(`${this.url}/onboarding`, { context: this.context });
+  }
+
+  invitePreonboarding(id: number): Observable<{message:string}> { return this.http.post<{message:string}>(`${this.url}/preonboarding/candidates/${id}/invite`, {}, { context: this.context }); }
+  getPreonboardingSubmission(id:number): Observable<{candidateName:string;details:string|null}> { return this.http.get<{candidateName:string;details:string|null}>(`${this.url}/candidates/${id}/preonboarding/submission`, {context:this.context}); }
+  getPreonboardingDocuments(id: number): Observable<PreonboardingDocumentView[]> { return this.http.get<PreonboardingDocumentView[]>(`${this.url}/candidates/${id}/preonboarding/documents`, { context: this.context }); }
+  reviewPreonboardingDocument(id: number, documentId: number, action: string, comment: string): Observable<PreonboardingDocumentView> { return this.http.post<PreonboardingDocumentView>(`${this.url}/candidates/${id}/preonboarding/documents/${documentId}/review`, {action,comment}, { context: this.context }); }
+  requestPreonboardingCorrection(id: number, comment: string): Observable<void> { return this.http.post<void>(`${this.url}/candidates/${id}/preonboarding/correction`, {action:'NEEDS_CORRECTION',comment}, { context: this.context }); }
+  approvePreonboarding(id: number, comment: string): Observable<void> { return this.http.post<void>(`${this.url}/candidates/${id}/preonboarding/approve`, {action:'APPROVED',comment}, { context: this.context }); }
+  downloadPreonboardingDocument(id: number, documentId: number): Observable<Blob> { return this.http.get(`${this.url}/candidates/${id}/preonboarding/documents/${documentId}/download`, {context:this.context,responseType:'blob'}); }
 
   resendOffer(id: number): Observable<OfferView> {
     return this.http.post<OfferView>(`${this.url}/candidates/${id}/offer/resend`, {}, { context: this.context });

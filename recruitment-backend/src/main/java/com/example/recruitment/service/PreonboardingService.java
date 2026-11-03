@@ -14,6 +14,8 @@ import com.example.recruitment.entity.PreonboardingConfig;
 import com.example.recruitment.entity.PreonboardingItem;
 import com.example.recruitment.entity.PreonboardingSetting;
 import com.example.recruitment.entity.PreonboardingStatus;
+import com.example.recruitment.repository.PreonboardingAccessRepository;
+import com.example.recruitment.repository.PreonboardingDocumentRepository;
 import com.example.recruitment.entity.Role;
 import com.example.recruitment.exception.ResourceNotFoundException;
 import com.example.recruitment.repository.CandidateEventRepository;
@@ -24,6 +26,7 @@ import com.example.recruitment.repository.PreonboardingSettingRepository;
 import com.example.recruitment.security.AuthUser;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -55,6 +58,14 @@ public class PreonboardingService {
     private final PreonboardingCaseRepository cases;
     private final ClientRepository clients;
     private final CandidateEventRepository events;
+    @Autowired(required = false)
+    private PreonboardingAccessService accessService;
+    @Autowired(required = false)
+    private PreonboardingAccessRepository accessRepository;
+    @Autowired(required = false)
+    private PreonboardingDocumentRepository documentRepository;
+    @Autowired(required = false)
+    private PreonboardingWorkflowService workflowService;
 
     public PreonboardingService(PreonboardingSettingRepository settings,
                                 PreonboardingConfigRepository configs,
@@ -117,6 +128,7 @@ public class PreonboardingService {
         if (existing.isPresent()) return existing.get();
 
         Client client = candidate.getClient();
+        ensureDefaults(client); // the public candidate form must have defaults even if HR has not opened settings yet
         Instant due = Instant.now().plus(config(client).getSubmissionDays(), ChronoUnit.DAYS);
 
         PreonboardingCase created = new PreonboardingCase();
@@ -133,6 +145,9 @@ public class PreonboardingService {
         e.setDetails("Documents are due by " + DATE.format(due.atZone(ZoneOffset.UTC)) + ".");
         e.setActor("System");
         events.save(e);
+        // The candidate receives their secure invitation immediately after accepting the offer.
+        // Unit tests that construct this service directly do not wire the mail-backed collaborator.
+        if (accessService != null) accessService.inviteSystem(candidate);
 
         return created;
     }
@@ -149,6 +164,11 @@ public class PreonboardingService {
     /** Called only when a candidate is deleted. */
     @Transactional
     public void deleteForCandidate(Long candidateId) {
+        cases.findByCandidateId(candidateId).ifPresent(c -> {
+            if (workflowService != null) workflowService.deleteFilesForCase(c.getId());
+            if (documentRepository != null) documentRepository.deleteByPreonboardingCaseId(c.getId());
+            if (accessRepository != null) accessRepository.deleteByPreonboardingCaseId(c.getId());
+        });
         cases.deleteByCandidateId(candidateId);
     }
 
